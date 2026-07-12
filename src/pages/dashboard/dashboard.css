@@ -1,0 +1,33 @@
+.dashboard-stub {
+  min-height: 100vh;
+  padding: 32px 24px;
+  background: #0b0d12;
+  color: #f2f4f8;
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 480px;
+}
+
+.dashboard-stub h1 {
+  font-size: 1.4rem;
+  margin: 0 0 12px;
+}
+
+.dashboard-stub p {
+  line-height: 1.5;
+  color: #d5d9e0;
+}
+
+.dashboard-stub-hint {
+  font-size: 0.85rem;
+  color: #9aa3b2;
+}
+
+.dashboard-stub-button {
+  margin-top: 12px;
+  padding: 10px 20px;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  background: transparent;
+  color: #f2f4f8;
+  cursor: pointer;
+}

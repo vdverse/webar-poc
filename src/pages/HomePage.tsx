@@ -7,6 +7,9 @@ export default function HomePage() {
       <p>
         <Link to="/dev/ar-proof">Open the AR proof of concept</Link>
       </p>
+      <p>
+        <Link to="/login">Sign in</Link> · <Link to="/register">Create an account</Link>
+      </p>
     </main>
   );
 }

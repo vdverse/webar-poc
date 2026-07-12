@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 scripts/target.gray
 scripts/target.size
+
+.env
+.env.local
+.env.*.local
