@@ -9,6 +9,14 @@ Do not treat any of these as deployed.
 Migrations are forward-only and must run in numerical order; later files
 reference objects created by earlier ones (dependencies listed per row).
 
+All 12 files were re-validated with `libpg-query` at the end of Batch 2
+(0001–0011: 2–10 statements each, all `OK`; 0012: 2 statements, `OK`). 0012
+was confirmed not to duplicate any column defined in 0003 — it is the sole
+definer of `source_method` and `wizard_stage`, only `ALTER`s `ar_projects`
+(so it inherits that table's existing RLS and `updated_at` trigger), and
+adds two check constraints. It is safe to apply on a fresh project after
+0001–0011 and safe to apply to a database that already ran Batch 1.
+
 | # | File | Tables created | Policies created | Storage changes | Functions / triggers | Depends on |
 |---|------|----------------|------------------|-----------------|----------------------|------------|
 | 0001 | `0001_extensions_and_helpers.sql` | — | — | — | `pgcrypto` extension; `set_updated_at()` trigger fn | — |
