@@ -9,11 +9,13 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "compile:target": "python3 scripts/generate-target.py && node scripts/compile-target.mjs"
+    "compile:target": "python3 scripts/generate-target.py && node scripts/compile-target.mjs",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@supabase/supabase-js": "^2.110.2",
+    "@tanstack/react-query": "^5.101.2",
     "mind-ar": "^1.2.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
