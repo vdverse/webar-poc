@@ -1,13 +1,11 @@
 # Supabase migration inventory
 
-**Execution status (applies to every row below): syntax-validated only.**
-Each file has been parsed with `libpg-query` (the C parser Postgres itself
-uses), but **none has been executed against a real Supabase project** by the
-build sandbox — it cannot reach `supabase.com` (`403 host_not_allowed`).
-Applying and verifying these against the now-configured project is done from
-your machine following `docs/batch-2-live-validation.md`; record the applied
-date + project ref there and flip this line once §2 of that runbook passes.
-Do not treat any of these as deployed until then.
+**Execution status:** migrations `0001`–`0013` have been applied to Supabase
+project ref `codqgrxradxaloruoyys` (2026-07-14 / 2026-07-15). Schema, RLS and
+buckets for Batch 1–2 were verified after `db push`. Migration `0013` adds
+temporary owner write policies for direct-GLB upload and browser publish until
+Edge Functions exist. Do not silently re-edit applied files — add forward
+migrations only.
 
 Migrations are forward-only and must run in numerical order; later files
 reference objects created by earlier ones (dependencies listed per row).
@@ -32,15 +30,13 @@ adds two check constraints. It is safe to apply on a fresh project after
 | 0008 | `0008_publications.sql` | `publications` | owner select-all; public select of `is_active = true` rows only | — | partial unique index: one active publication per project | 0003 |
 | 0009 | `0009_viewer_events.sql` | `viewer_events` | owner select via join to `ar_projects`; public insert validated against an active publication | — | — | 0003, 0008 |
 | 0010 | `0010_storage_buckets_and_policies.sql` | — | 3 policies on `storage.objects` | Buckets: `source-images-private` (private, owner CRUD by uid path prefix), `generated-models-private` (private, owner read-only), `published-ar-assets` (public read, service-role-only write) | — | 0001 |
+| 0011 | `0011_grants.sql` | — | — | — | — (GRANT statements; RLS policies are unreachable without them) | all above through 0010 |
 | 0012 | `0012_project_wizard_columns.sql` | — (alters `ar_projects`) | — | — | — | 0003 |
-| 0011 | `0011_grants.sql` | — | — | — | — (GRANT statements; RLS policies are unreachable without them) | all above |
+| 0013 | `0013_creator_publish_write_policies.sql` | — | owner insert/update on `generated_models` + `publications`; storage write policies for `generated-models-private` and `published-ar-assets` | Temporary creator write path for the GLB publish slice (Edge Functions later) | 0006, 0008, 0010, 0011 |
 
-> 0012 is listed before 0011 in the table only to group schema before
-> grants conceptually; **execution order is strictly numeric:
-> 0001 → 0011, then 0012.** 0012 was added in Batch 2 and only alters
-> `ar_projects` (adds `source_method` and `wizard_stage` columns with check
-> constraints), so it is safe to run after 0011 on a database that already
-> executed 0001–0011.
+> **Execution order is strictly numeric: 0001 → 0013.** 0012 only alters
+> `ar_projects`. 0013 is required for the browser-side GLB publish slice and
+> is safe only after 0010–0011.
 
 ## Setup path A — Supabase CLI (run on your machine, not in this sandbox)
 
@@ -57,7 +53,7 @@ files (e.g. 0012 if you had already pushed 0001–0011).
 ## Setup path B — Supabase SQL editor
 
 Open the project's SQL editor and paste/run each file's contents in
-numerical order, 0001 through 0012, one file at a time. If a file fails,
+numerical order, 0001 through 0013, one file at a time. If a file fails,
 stop and fix before continuing — later files assume earlier ones succeeded.
 
 ## Rules

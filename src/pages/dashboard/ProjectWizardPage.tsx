@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
+import { GlbUploader } from '../../features/models/components/GlbUploader';
+import { useLatestModelQuery } from '../../features/models/modelHooks';
 import {
   useProjectQuery,
   useUpdateProjectMutation,
@@ -31,6 +33,7 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
   const project = useProjectQuery(projectId);
   const update = useUpdateProjectMutation();
   const images = useSourceImagesQuery(projectId);
+  const latestModel = useLatestModelQuery(projectId);
   const [editingDetails, setEditingDetails] = useState(false);
 
   if (project.isPending) {
@@ -57,8 +60,9 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
     update.mutate({ projectId: p.id, wizard_stage: next, ...extra });
   };
 
+  const isGlb = p.source_method === 'glb_upload';
   const minImages = p.source_method === 'multi_view' ? MULTI_VIEW_MIN_IMAGES : 1;
-  const captureComplete = imageCount >= minImages;
+  const captureComplete = isGlb ? Boolean(latestModel.data) : imageCount >= minImages;
 
   return (
     <div>
@@ -143,18 +147,57 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
                 longer to capture, usually more faithful.
               </p>
             </button>
-            <div className="method-card" aria-disabled="true" style={{ opacity: 0.55, cursor: 'default' }}>
+            <button
+              type="button"
+              className={
+                p.source_method === 'glb_upload'
+                  ? 'method-card method-card--selected'
+                  : 'method-card'
+              }
+              onClick={() => goTo('capture', { source_method: 'glb_upload' })}
+            >
               <strong>Upload an existing GLB</strong>
               <p>
-                Bring a ready-made 3D model instead of generating one. Coming
-                in Batch 3 together with generation.
+                Bring a ready-made 3D model. Preview, adjust, and publish to a
+                public AR link with QR — no image-to-3D generation required.
               </p>
-            </div>
+            </button>
           </div>
         </section>
       )}
 
-      {effectiveStage === 'capture' && p.source_method && (
+      {effectiveStage === 'capture' && p.source_method === 'glb_upload' && (
+        <section aria-label="Upload GLB">
+          <p className="dash-page-sub">Step 3 of 5 — upload a .glb file (max 25 MB).</p>
+          <GlbUploader
+            projectId={p.id}
+            onUploaded={() => {
+              void latestModel.refetch();
+            }}
+          />
+          <div className="wizard-actions">
+            <button
+              className="dash-button-secondary"
+              onClick={() => goTo('source_method')}
+              disabled={update.isPending}
+            >
+              Back
+            </button>
+            <button
+              className="dash-button"
+              onClick={() => goTo('review')}
+              disabled={!captureComplete || update.isPending}
+            >
+              Continue to review
+            </button>
+            <Link className="dash-button-secondary" to={`/dashboard/projects/${p.id}/studio`}>
+              Open studio
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {effectiveStage === 'capture' && p.source_method && p.source_method !== 'glb_upload' && (
         <section aria-label="Add photos">
           <p className="dash-page-sub">
             Step 3 of 5 —{' '}
@@ -226,16 +269,29 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
                   ? 'Single image'
                   : p.source_method === 'multi_view'
                     ? 'Multiple-angle photos'
-                    : '—'}
+                    : p.source_method === 'glb_upload'
+                      ? 'Existing GLB'
+                      : '—'}
               </dd>
             </div>
-            <div className="review-row">
-              <dt>Images</dt>
-              <dd>{imageCount}</dd>
-            </div>
+            {isGlb ? (
+              <div className="review-row">
+                <dt>Model</dt>
+                <dd>
+                  {latestModel.data
+                    ? `${latestModel.data.mesh_count ?? '—'} meshes · ${(latestModel.data.triangle_count ?? 0).toLocaleString()} tris`
+                    : 'No GLB uploaded'}
+                </dd>
+              </div>
+            ) : (
+              <div className="review-row">
+                <dt>Images</dt>
+                <dd>{imageCount}</dd>
+              </div>
+            )}
           </dl>
 
-          {imageCount > 0 && images.data && (
+          {!isGlb && imageCount > 0 && images.data && (
             <div className="upload-grid" style={{ maxWidth: 720 }}>
               {images.data.map((img) => (
                 <div className="upload-item" key={img.id}>
@@ -258,12 +314,12 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
               onClick={() => goTo('capture')}
               disabled={update.isPending}
             >
-              Back to photos
+              {isGlb ? 'Back to upload' : 'Back to photos'}
             </button>
             <button
               className="dash-button"
               onClick={() => goTo('saved')}
-              disabled={imageCount < minImages || update.isPending}
+              disabled={!captureComplete || update.isPending}
             >
               Save project
             </button>
@@ -275,27 +331,51 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
         <section aria-label="Saved">
           <p className="dash-page-sub">Step 5 of 5 — saved.</p>
           <div className="dash-empty" style={{ alignItems: 'flex-start', textAlign: 'left' }}>
-            <p>
-              <strong>{p.name}</strong> is saved with {imageCount}{' '}
-              {imageCount === 1 ? 'image' : 'images'}. Your photos are stored
-              privately — they are never shown to viewers.
-            </p>
-            <p>
-              Next comes image-to-3D generation, which arrives in Batch 3. Your
-              project will be right here waiting.
-            </p>
-            <div className="wizard-actions">
-              <button className="dash-button" disabled title="Image-to-3D generation is not available yet">
-                Generate 3D model — coming in Batch 3
-              </button>
-              <button
-                className="dash-button-secondary"
-                onClick={() => goTo('capture')}
-                disabled={update.isPending}
-              >
-                Edit photos
-              </button>
-            </div>
+            {isGlb ? (
+              <>
+                <p>
+                  <strong>{p.name}</strong> has a GLB ready. Open the studio to preview, adjust
+                  scene settings, publish a public link, and generate a QR code.
+                </p>
+                <div className="wizard-actions">
+                  <Link className="dash-button" to={`/dashboard/projects/${p.id}/studio`}>
+                    Open GLB studio
+                  </Link>
+                  <button
+                    className="dash-button-secondary"
+                    onClick={() => goTo('capture')}
+                    disabled={update.isPending}
+                  >
+                    Replace GLB
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>{p.name}</strong> is saved with {imageCount}{' '}
+                  {imageCount === 1 ? 'image' : 'images'}. Your photos are stored
+                  privately — they are never shown to viewers.
+                </p>
+                <p>
+                  Next comes image-to-3D generation, which arrives in Batch 3. Your
+                  project will be right here waiting. If you already have a GLB,
+                  switch source method or open studio after choosing “Upload an existing GLB”.
+                </p>
+                <div className="wizard-actions">
+                  <button className="dash-button" disabled title="Image-to-3D generation is not available yet">
+                    Generate 3D model — coming in Batch 3
+                  </button>
+                  <button
+                    className="dash-button-secondary"
+                    onClick={() => goTo('capture')}
+                    disabled={update.isPending}
+                  >
+                    Edit photos
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </section>
       )}

@@ -55,6 +55,14 @@ vi.mock('../../features/uploads/sourceImageHooks', () => ({
   useSignedPreviewQuery: () => ({ data: 'https://signed.example/x', isPending: false, isError: false }),
 }));
 
+vi.mock('../../features/models/modelHooks', () => ({
+  useLatestModelQuery: () => ({ data: null, isPending: false, isError: false, refetch: vi.fn() }),
+}));
+
+vi.mock('../../features/models/components/GlbUploader', () => ({
+  GlbUploader: () => <div data-testid="glb-uploader">GLB uploader</div>,
+}));
+
 // SignedThumb renders a real <img>; jsdom's canvas shim can't construct it,
 // and it isn't the subject of these tests (its signed-URL behaviour is
 // covered via the useSignedPreviewQuery hook). Stub it to a plain element.
@@ -96,13 +104,16 @@ describe('ProjectWizardPage', () => {
     );
   });
 
-  it('marks the existing-GLB option as unavailable and does not persist it', () => {
+  it('persists existing-GLB as the source method', () => {
     renderWizard();
-    expect(screen.getByText(/Upload an existing GLB/i)).toBeTruthy();
-    expect(screen.getByText(/Coming in Batch 3/i)).toBeTruthy();
-    // Clicking the disabled card must not fire an update.
     fireEvent.click(screen.getByText(/Upload an existing GLB/i));
-    expect(mutateUpdate).not.toHaveBeenCalled();
+    expect(mutateUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        wizard_stage: 'capture',
+        source_method: 'glb_upload',
+      }),
+    );
   });
 
   it('shows real image metadata on the review step', () => {

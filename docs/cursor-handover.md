@@ -75,9 +75,13 @@ login, and nothing pretends to save data. This is covered by automated tests
 
 ## Incomplete / not started
 
-- Batch 2 (this branch): dashboard, project CRUD, wizard, source-image upload
-- Batch 3+: provider abstraction, generation backend, model preview/editor,
-  model-viewer public viewer, USDZ, publishing, QR, analytics, entitlements
+- Two-user live Batch 2 RLS validation was **stopped** (product focus moved to
+  the direct-GLB publish slice). Auth, migrations, and RLS remain in place.
+- Direct GLB upload → studio → publish → QR → `/view/:slug` is implemented on
+  this branch; see `docs/glb-publish-slice.md`. Manual phone AR acceptance is
+  still required before calling the slice proven.
+- Batch 3+: image-to-3D provider, generation backend, USDZ conversion,
+  analytics, entitlements
 
 ## External blockers
 

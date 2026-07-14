@@ -21,8 +21,10 @@ const OverviewPage = lazy(() => import('./pages/dashboard/OverviewPage'));
 const ProjectsPage = lazy(() => import('./pages/dashboard/ProjectsPage'));
 const NewProjectPage = lazy(() => import('./pages/dashboard/NewProjectPage'));
 const ProjectWizardPage = lazy(() => import('./pages/dashboard/ProjectWizardPage'));
+const ProjectStudioPage = lazy(() => import('./pages/dashboard/ProjectStudioPage'));
 const SettingsPage = lazy(() => import('./pages/dashboard/SettingsPage'));
 const NotAvailableYetPage = lazy(() => import('./pages/dashboard/NotAvailableYetPage'));
+const PublicViewerPage = lazy(() => import('./pages/PublicViewerPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +47,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/dev/ar-proof" element={<ArProofPage />} />
+              <Route path="/view/:publicSlug" element={<PublicViewerPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -65,6 +68,7 @@ export default function App() {
                   path="projects/:projectId/source"
                   element={<ProjectWizardPage forceStage="capture" />}
                 />
+                <Route path="projects/:projectId/studio" element={<ProjectStudioPage />} />
                 <Route
                   path="generation-jobs"
                   element={
