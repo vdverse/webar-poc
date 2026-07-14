@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "compile:target": "python3 scripts/generate-target.py && node scripts/compile-target.mjs",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "validate:supabase": "node scripts/validate-supabase.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

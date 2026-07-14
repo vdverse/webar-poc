@@ -81,9 +81,12 @@ login, and nothing pretends to save data. This is covered by automated tests
 
 ## External blockers
 
-1. **No live Supabase project.** URL + anon key needed; migrations must be
-   executed by you (CLI or SQL editor) because this sandbox cannot reach
-   `supabase.com` (network allow-list).
+1. **Live Supabase validation is pending.** A project is configured in
+   `.env.local` on the developer machine, but the build sandbox cannot reach
+   `supabase.com` (`403 host_not_allowed`), so migrations have not been
+   applied and no live auth/CRUD/storage/RLS check has run from here. Run
+   `docs/batch-2-live-validation.md` (migrations + `npm run validate:supabase`
+   + the manual app checks) on a machine with network access before merging.
 2. **No image-to-3D provider credential** (blocks Batch 3, not Batch 2).
 3. Google OAuth appears in the UI only when configured in the Supabase
    dashboard.

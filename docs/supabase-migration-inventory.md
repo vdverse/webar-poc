@@ -2,9 +2,12 @@
 
 **Execution status (applies to every row below): syntax-validated only.**
 Each file has been parsed with `libpg-query` (the C parser Postgres itself
-uses), but **none has been executed against a real Supabase project** — no
-project exists yet and this development sandbox cannot reach `supabase.com`.
-Do not treat any of these as deployed.
+uses), but **none has been executed against a real Supabase project** by the
+build sandbox — it cannot reach `supabase.com` (`403 host_not_allowed`).
+Applying and verifying these against the now-configured project is done from
+your machine following `docs/batch-2-live-validation.md`; record the applied
+date + project ref there and flip this line once §2 of that runbook passes.
+Do not treat any of these as deployed until then.
 
 Migrations are forward-only and must run in numerical order; later files
 reference objects created by earlier ones (dependencies listed per row).
