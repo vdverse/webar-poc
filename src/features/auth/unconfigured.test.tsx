@@ -1,14 +1,21 @@
 /**
- * These tests run with no VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY set
- * (the default in this environment and in the GitHub Pages deployment),
- * so `supabase` is null and isConfigured is false throughout. That is
- * exactly the situation a real visitor hits today, and it's the one path
- * this suite can verify without a live Supabase project: every auth and
- * dashboard route must degrade to a clear message instead of crashing.
+ * Verifies the unconfigured degradation path: when Supabase is not
+ * available to the browser client, every auth/dashboard route must show a
+ * clear notice instead of crashing or quietly redirecting.
+ *
+ * This suite mocks `supabaseClient` as unconfigured rather than relying on
+ * a missing `.env.local`. Local developers (and this live-validation run)
+ * have real credentials, so reading import.meta.env would otherwise flip
+ * isConfigured to true and break these assertions.
  */
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabaseClient', () => ({
+  isSupabaseConfigured: false,
+  supabase: null,
+}));
 
 import { AuthProvider } from './AuthProvider';
 import { ProtectedRoute } from './ProtectedRoute';

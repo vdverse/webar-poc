@@ -14,16 +14,17 @@
  * Usage:
  *   node scripts/validate-supabase.mjs
  *
- * It reads .env.local for:
- *   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY   (required)
+ * It reads (in order, later wins):
+ *   .env.local              — VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+ *   .env.validation.local   — optional A_EMAIL/A_PASSWORD/B_EMAIL/B_PASSWORD
+ *   process.env             — same names, for CI / shell overrides
  *
- * It provisions two throwaway test users via signUp. If your project has
- * "Confirm email" enabled, signUp won't yield an active session — the script
- * detects this and tells you exactly what to do (see the runbook). To run the
- * authenticated portions automatically, either temporarily disable email
- * confirmation in Auth settings for the test run, or pass pre-confirmed
- * credentials:
- *   A_EMAIL=... A_PASSWORD=... B_EMAIL=... B_PASSWORD=... node scripts/validate-supabase.mjs
+ * Prefer two pre-confirmed accounts via A_EMAIL / B_EMAIL (never committed).
+ * When those are present the script SIGN-IN only — it will not call signUp
+ * (which burns the email rate limit and masks the real sign-in error).
+ * Without A_/B_ credentials it may provision throwaway users via signUp; if
+ * email confirmation is ON, signUp yields no session and authenticated checks
+ * are skipped with guidance.
  *
  * Nothing here is destructive to real data: it creates clearly-labelled
  * `[batch2-validation]` projects and removes them at the end.
@@ -31,23 +32,25 @@
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 
-// ---- tiny .env.local loader (no dependency on dotenv) ---------------------
-function loadEnvLocal() {
-  let text = '';
+function loadEnvFile(url) {
   try {
-    text = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
+    const text = readFileSync(url, 'utf8');
+    const out = {};
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '');
+    }
+    return out;
   } catch {
-    // fall back to process.env only
+    return {};
   }
-  const out = {};
-  for (const line of text.split('\n')) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
-    if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-  return { ...out, ...process.env };
 }
 
-const env = loadEnvLocal();
+const env = {
+  ...loadEnvFile(new URL('../.env.local', import.meta.url)),
+  ...loadEnvFile(new URL('../.env.validation.local', import.meta.url)),
+  ...process.env,
+};
 const URL_ = env.VITE_SUPABASE_URL;
 const ANON = env.VITE_SUPABASE_ANON_KEY;
 
@@ -69,19 +72,24 @@ function section(t) { console.log(`\n\u2500\u2500 ${t}`); }
 const anonClient = () => createClient(URL_, ANON, { auth: { persistSession: false } });
 
 const rand = Math.random().toString(36).slice(2, 8);
-const A = { email: env.A_EMAIL || `batch2+a-${rand}@example.com`, password: env.A_PASSWORD || `Aa1!${rand}${rand}` };
-const B = { email: env.B_EMAIL || `batch2+b-${rand}@example.com`, password: env.B_PASSWORD || `Bb2!${rand}${rand}` };
+const providedAccounts = Boolean(env.A_EMAIL && env.A_PASSWORD && env.B_EMAIL && env.B_PASSWORD);
+// Avoid reserved domains like example.com — GoTrue rejects them as invalid.
+const A = { email: env.A_EMAIL || `batch2.a.${rand}@mailinator.com`, password: env.A_PASSWORD || `Aa1!${rand}${rand}` };
+const B = { email: env.B_EMAIL || `batch2.b.${rand}@mailinator.com`, password: env.B_PASSWORD || `Bb2!${rand}${rand}` };
 
-async function signInOrUp(creds) {
+async function signInOrUp(creds, { allowSignUp }) {
   const c = anonClient();
-  let res = await c.auth.signInWithPassword(creds);
-  if (res.error) {
-    const up = await c.auth.signUp(creds);
-    if (up.error) return { client: c, session: null, error: up.error };
-    if (!up.data.session) return { client: c, session: null, error: null, needsConfirm: true };
-    res = up;
+  const res = await c.auth.signInWithPassword(creds);
+  if (!res.error && res.data.session) {
+    return { client: c, session: res.data.session, error: null };
   }
-  return { client: c, session: res.data.session, error: null };
+  if (!allowSignUp) {
+    return { client: c, session: null, error: res.error || new Error('sign-in produced no session') };
+  }
+  const up = await c.auth.signUp(creds);
+  if (up.error) return { client: c, session: null, error: up.error };
+  if (!up.data.session) return { client: c, session: null, error: null, needsConfirm: true };
+  return { client: c, session: up.data.session, error: null };
 }
 
 async function main() {
@@ -105,9 +113,10 @@ async function main() {
   }
 
   // ---- STEP: auth ----------------------------------------------------------
-  section('Auth: provision two users');
-  const a = await signInOrUp(A);
-  const b = await signInOrUp(B);
+  section(providedAccounts ? 'Auth: sign in supplied accounts' : 'Auth: provision two users');
+  if (providedAccounts) console.log('  · using A_EMAIL/B_EMAIL (sign-in only, no signUp)');
+  const a = await signInOrUp(A, { allowSignUp: !providedAccounts });
+  const b = await signInOrUp(B, { allowSignUp: !providedAccounts });
   if (a.needsConfirm || b.needsConfirm) {
     console.log('  ! Email confirmation is ON: signUp did not return a session.');
     console.log('    Confirm the users (or disable confirmation for this run, or pass');

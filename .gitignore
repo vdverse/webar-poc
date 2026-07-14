@@ -28,3 +28,6 @@ scripts/target.size
 .env
 .env.local
 .env.*.local
+
+# Supabase CLI link cache (may contain pooler credentials)
+supabase/.temp/
