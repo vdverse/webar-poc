@@ -55,13 +55,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Requires the Google provider to be configured in the Supabase
         // project dashboard; if it isn't, Supabase returns a descriptive
         // error which friendlyAuthError falls back to generic copy for.
-        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+        const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}${base}/dashboard`,
+          },
+        });
         return { error: error ? friendlyAuthError(error.message) : null };
       },
       async requestPasswordReset(email) {
         if (!supabase) return { error: 'Supabase is not configured.' };
+        const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo: `${window.location.origin}${base}/reset-password`,
         });
         return { error: error ? friendlyAuthError(error.message) : null };
       },

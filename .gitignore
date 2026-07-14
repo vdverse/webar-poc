@@ -31,3 +31,4 @@ scripts/target.size
 
 # Supabase CLI link cache (may contain pooler credentials)
 supabase/.temp/
+.vercel

@@ -6,6 +6,10 @@ was **stopped by design** so the product focus could move to a direct-GLB
 upload → preview → publish → QR → public viewer path. Existing auth,
 migrations 0001–0012, RLS and photo-wizard work are preserved.
 
+**Preview deployment:** https://webar-poc-one.vercel.app  
+See `docs/preview-deployment-testing.md` for env vars, Supabase redirect URLs,
+and the Android phone checklist.
+
 ## What this slice delivers
 
 1. Creator signs in with one real account (Option A).
