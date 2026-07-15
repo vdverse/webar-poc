@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { PLACEMENT_MODES, type PlacementMode, type SceneSettings } from '../types';
+import { PLACEMENT_MODES, AR_SCALE_MODES, type ArScaleMode, type PlacementMode, type SceneSettings } from '../types';
+import { deriveDefaultPhysicalDimensions, normalizeGlbBounds } from '../arPlacement';
 
 export interface SceneSettingsFormValues {
   scale: number;
@@ -17,6 +18,7 @@ export interface SceneSettingsFormValues {
   physicalWidth: string;
   physicalHeight: string;
   physicalDepth: string;
+  arScaleMode: ArScaleMode;
 }
 
 function fromSettings(s: SceneSettings | null | undefined, animations: string[]): SceneSettingsFormValues {
@@ -36,18 +38,21 @@ function fromSettings(s: SceneSettings | null | undefined, animations: string[])
     physicalWidth: cfg.physicalWidth != null ? String(cfg.physicalWidth) : '',
     physicalHeight: cfg.physicalHeight != null ? String(cfg.physicalHeight) : '',
     physicalDepth: cfg.physicalDepth != null ? String(cfg.physicalDepth) : '',
+    arScaleMode: cfg.arScaleMode === 'auto' ? 'auto' : 'fixed',
   };
 }
 
 export function SceneSettingsForm({
   settings,
   animationNames,
+  modelBounds,
   busy,
   onChange,
   onSave,
 }: {
   settings: SceneSettings | null | undefined;
   animationNames: string[];
+  modelBounds?: unknown;
   busy?: boolean;
   onChange: (values: SceneSettingsFormValues) => void;
   onSave: (values: SceneSettingsFormValues) => void;
@@ -66,6 +71,13 @@ export function SceneSettingsForm({
       onChange(next);
       return next;
     });
+  };
+
+  const bounds = normalizeGlbBounds(modelBounds);
+  const estimated = bounds ? deriveDefaultPhysicalDimensions(bounds) : null;
+
+  const applyTestHeight = () => {
+    patch({ physicalHeight: '0.30' });
   };
 
   return (
@@ -121,10 +133,35 @@ export function SceneSettingsForm({
       </div>
       <div className="scene-settings-row">
         <label className="dash-field">
+          <span>Real-world height (m)</span>
+          <input
+            type="number"
+            min={0.01}
+            step={0.01}
+            placeholder={estimated ? String(estimated.height) : '0.30'}
+            value={values.physicalHeight}
+            disabled={busy}
+            onChange={(e) => patch({ physicalHeight: e.target.value })}
+          />
+          <span className="dash-field-hint">
+            Primary AR size control. Example test object: 0.30 m.
+            {estimated && !values.physicalHeight.trim()
+              ? ` Estimated from GLB: ${estimated.height.toFixed(2)} m tall (longest axis ~${estimated.targetLongestM} m).`
+              : null}
+          </span>
+        </label>
+        <div className="scene-settings-inline-actions">
+          <button type="button" className="dash-button dash-button--small" disabled={busy} onClick={applyTestHeight}>
+            Set test height (0.30 m)
+          </button>
+        </div>
+      </div>
+      <div className="scene-settings-row">
+        <label className="dash-field">
           <span>Physical width (m)</span>
           <input
             type="number"
-            min={0}
+            min={0.01}
             step={0.01}
             value={values.physicalWidth}
             disabled={busy}
@@ -132,21 +169,10 @@ export function SceneSettingsForm({
           />
         </label>
         <label className="dash-field">
-          <span>Physical height (m)</span>
-          <input
-            type="number"
-            min={0}
-            step={0.01}
-            value={values.physicalHeight}
-            disabled={busy}
-            onChange={(e) => patch({ physicalHeight: e.target.value })}
-          />
-        </label>
-        <label className="dash-field">
           <span>Physical depth (m)</span>
           <input
             type="number"
-            min={0}
+            min={0.01}
             step={0.01}
             value={values.physicalDepth}
             disabled={busy}
@@ -154,6 +180,20 @@ export function SceneSettingsForm({
           />
         </label>
       </div>
+      <label className="dash-field">
+        <span>AR user scaling</span>
+        <select
+          value={values.arScaleMode}
+          disabled={busy}
+          onChange={(e) => patch({ arScaleMode: e.target.value as ArScaleMode })}
+        >
+          {AR_SCALE_MODES.map((m) => (
+            <option key={m} value={m}>
+              {m === 'fixed' ? 'Fixed (recommended for anchoring tests)' : 'Auto (pinch to resize in AR)'}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="dash-field">
         <span>Placement mode</span>
         <select

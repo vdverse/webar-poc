@@ -1,22 +1,31 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
+import type { ArScaleMode } from '../types';
 import { ensureModelViewerLoaded } from '../loadModelViewer';
 import type { SceneSettings } from '../types';
+
+export type ArPlacement = 'floor' | 'wall';
 
 export interface ModelPreviewProps {
   src: string | null;
   iosSrc?: string | null;
   alt: string;
   settings?: Partial<SceneSettings> | null;
+  /** Overrides settings.scale when set (e.g. publication effectiveScale). */
+  viewerScale?: number;
   ar?: boolean;
   arModes?: string;
+  arPlacement?: ArPlacement;
+  arScaleMode?: ArScaleMode;
   className?: string;
   onLoad?: () => void;
   onError?: (message: string) => void;
+  onArStatusChange?: (status: string, tracking?: string) => void;
 }
 
 type ModelViewerElement = HTMLElement & {
   src?: string;
+  getAttribute?: (name: string) => string | null;
 };
 
 export function ModelPreview({
@@ -24,11 +33,15 @@ export function ModelPreview({
   iosSrc,
   alt,
   settings,
+  viewerScale,
   ar = false,
   arModes = 'webxr scene-viewer',
+  arPlacement = 'floor',
+  arScaleMode = 'fixed',
   className,
   onLoad,
   onError,
+  onArStatusChange,
 }: ModelPreviewProps) {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -69,6 +82,25 @@ export function ModelPreview({
     };
   }, [ready, src, onLoad, onError]);
 
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !ready || !ar || !onArStatusChange) return;
+
+    const emit = () => {
+      const status = el.getAttribute?.('ar-status') ?? 'unknown';
+      const tracking = el.getAttribute?.('ar-tracking') ?? undefined;
+      onArStatusChange(status, tracking);
+    };
+
+    el.addEventListener('ar-status', emit);
+    el.addEventListener('ar-tracking', emit);
+    emit();
+    return () => {
+      el.removeEventListener('ar-status', emit);
+      el.removeEventListener('ar-tracking', emit);
+    };
+  }, [ar, ready, onArStatusChange, src]);
+
   if (failed) {
     return (
       <div className={className} role="alert" style={{ padding: 24 }}>
@@ -85,7 +117,7 @@ export function ModelPreview({
     );
   }
 
-  const scale = settings?.scale ?? 1;
+  const scale = viewerScale ?? settings?.scale ?? 1;
   const rx = settings?.rotation_x ?? 0;
   const ry = settings?.rotation_y ?? 0;
   const rz = settings?.rotation_z ?? 0;
@@ -106,6 +138,8 @@ export function ModelPreview({
       alt={alt}
       ar={ar || undefined}
       ar-modes={ar ? arModes : undefined}
+      ar-placement={ar ? arPlacement : undefined}
+      ar-scale={ar ? arScaleMode : undefined}
       camera-controls={settings?.camera_controls !== false ? true : undefined}
       auto-rotate={settings?.auto_rotate ? true : undefined}
       shadow-intensity={String(settings?.shadow_intensity ?? 1)}
@@ -116,6 +150,7 @@ export function ModelPreview({
       style={style}
       reveal="auto"
       loading="eager"
+      interaction-prompt="none"
     />
   );
 }

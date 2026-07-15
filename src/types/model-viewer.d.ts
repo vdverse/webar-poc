@@ -8,6 +8,8 @@ type ModelViewerProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLEleme
   alt?: string;
   ar?: boolean | string;
   'ar-modes'?: string;
+  'ar-placement'?: 'floor' | 'wall' | string;
+  'ar-scale'?: 'fixed' | 'auto' | string;
   'camera-controls'?: boolean | string;
   'auto-rotate'?: boolean | string;
   'shadow-intensity'?: string | number;
@@ -18,6 +20,7 @@ type ModelViewerProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLEleme
   'ios-src'?: string;
   reveal?: string;
   loading?: string;
+  'interaction-prompt'?: string;
   class?: string;
   style?: CSSProperties;
 };

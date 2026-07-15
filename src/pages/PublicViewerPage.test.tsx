@@ -3,6 +3,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ModelPreviewProps } from '../features/models/components/ModelPreview';
+
 vi.mock('../lib/env', () => ({
   env: {
     VITE_SUPABASE_URL: 'https://example.supabase.co',
@@ -11,6 +13,8 @@ vi.mock('../lib/env', () => ({
   },
   isSupabaseConfigured: true,
 }));
+
+const capturedPreview: { current: ModelPreviewProps | null } = { current: null };
 
 vi.mock('../features/models/publishService', () => ({
   getActivePublicationBySlug: vi.fn(async (slug: string) => {
@@ -43,9 +47,19 @@ vi.mock('../features/models/publishService', () => ({
           animationName: null,
           animationAutoplay: true,
           animationLoop: true,
-          physicalWidth: null,
-          physicalHeight: null,
-          physicalDepth: null,
+          physicalWidth: 0.2,
+          physicalHeight: 0.3,
+          physicalDepth: 0.2,
+          physicalSizeEstimated: false,
+          effectiveScale: 0.1,
+          arScaleMode: 'fixed',
+        },
+        modelBounds: {
+          width: 2,
+          height: 3,
+          depth: 2,
+          min: [-1, 0, -1],
+          max: [1, 3, 1],
         },
         arModes: 'webxr scene-viewer',
         publishedAt: '2026-01-01T00:00:00Z',
@@ -55,7 +69,10 @@ vi.mock('../features/models/publishService', () => ({
 }));
 
 vi.mock('../features/models/components/ModelPreview', () => ({
-  ModelPreview: () => <div data-testid="preview">preview</div>,
+  ModelPreview: (props: ModelPreviewProps) => {
+    capturedPreview.current = props;
+    return <div data-testid="preview">preview</div>;
+  },
 }));
 
 import PublicViewerPage from './PublicViewerPage';
@@ -75,7 +92,10 @@ function renderAt(slug: string) {
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  capturedPreview.current = null;
+});
 
 describe('PublicViewerPage', () => {
   it('shows a missing-publication state', async () => {
@@ -87,6 +107,27 @@ describe('PublicViewerPage', () => {
     renderAt('demo-chair');
     expect(await screen.findByText('Demo Chair')).toBeTruthy();
     expect(screen.getByTestId('preview')).toBeTruthy();
-    expect(screen.getByText(/No account required/i)).toBeTruthy();
+    expect(screen.getByText(/View in your space/i)).toBeTruthy();
+  });
+
+  it('passes floor placement and fixed AR scale to model-viewer', async () => {
+    renderAt('demo-chair');
+    await screen.findByText('Demo Chair');
+    expect(capturedPreview.current?.arPlacement).toBe('floor');
+    expect(capturedPreview.current?.arScaleMode).toBe('fixed');
+    expect(capturedPreview.current?.arModes).toBe('webxr scene-viewer');
+    expect(capturedPreview.current?.viewerScale).toBe(0.1);
+  });
+
+  it('shows AR placement instructions before launch', async () => {
+    renderAt('demo-chair');
+    expect(await screen.findByText(/scan the floor or table/i)).toBeTruthy();
+    expect(screen.getByText(/tap to place/i)).toBeTruthy();
+  });
+
+  it('shows AR troubleshooting guidance', async () => {
+    renderAt('demo-chair');
+    await screen.findByText('Demo Chair');
+    expect(screen.getByText(/AR troubleshooting/i)).toBeTruthy();
   });
 });

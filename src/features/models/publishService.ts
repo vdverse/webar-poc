@@ -3,6 +3,15 @@ import { isValidSlug, publishedAssetPath, slugify } from '../../lib/storagePaths
 import { supabase } from '../../lib/supabaseClient';
 import { ProjectServiceError } from '../projects/api/projectService';
 import type { ArProject } from '../projects/types';
+import {
+  buildArModes,
+  collectInvalidPhysicalDimensionFields,
+  computeModelViewerScale,
+  evaluateFloorAlignment,
+  normalizeGlbBounds,
+  resolveArScaleMode,
+  resolvePhysicalDimensions,
+} from './arPlacement';
 import type { GeneratedModel, Publication, PublicationSnapshot, SceneSettings } from './types';
 
 const PRIVATE_BUCKET = 'generated-models-private';
@@ -71,6 +80,31 @@ export function assertCanPublish(input: {
   if (!(input.settings.scale > 0)) {
     throw new ProjectServiceError('request-failed', 'Scale must be greater than zero.');
   }
+  const cfg = input.settings.viewer_config ?? {};
+  const invalidDims = collectInvalidPhysicalDimensionFields({
+    physicalWidth: typeof cfg.physicalWidth === 'number' ? cfg.physicalWidth : null,
+    physicalHeight: typeof cfg.physicalHeight === 'number' ? cfg.physicalHeight : null,
+    physicalDepth: typeof cfg.physicalDepth === 'number' ? cfg.physicalDepth : null,
+  });
+  if (invalidDims.length > 0) {
+    throw new ProjectServiceError(
+      'request-failed',
+      `Invalid physical size (${invalidDims.join(', ')}). Use positive values between 0.01 m and 10 m.`,
+    );
+  }
+  if (input.model) {
+    const bounds = normalizeGlbBounds(input.model.bounds);
+    const { scale } = computeModelViewerScale({
+      sceneScale: input.settings.scale,
+      bounds,
+      physicalWidth: typeof cfg.physicalWidth === 'number' ? cfg.physicalWidth : null,
+      physicalHeight: typeof cfg.physicalHeight === 'number' ? cfg.physicalHeight : null,
+      physicalDepth: typeof cfg.physicalDepth === 'number' ? cfg.physicalDepth : null,
+    });
+    if (!Number.isFinite(scale) || scale <= 0) {
+      throw new ProjectServiceError('request-failed', 'Could not compute a safe AR scale for this model.');
+    }
+  }
 }
 
 /** Ensures the signed-in user owns every row involved in publish. */
@@ -104,11 +138,31 @@ export function makePublicSlug(projectName: string, projectId: string): string {
 function buildSnapshot(input: {
   project: ArProject;
   settings: SceneSettings;
+  model: GeneratedModel;
   glbPublicPath: string;
   glbPublicUrl: string;
   usdzPublicUrl: string | null;
 }): PublicationSnapshot {
   const cfg = input.settings.viewer_config ?? {};
+  const bounds = normalizeGlbBounds(input.model.bounds);
+  const physicalWidth = typeof cfg.physicalWidth === 'number' ? cfg.physicalWidth : null;
+  const physicalHeight = typeof cfg.physicalHeight === 'number' ? cfg.physicalHeight : null;
+  const physicalDepth = typeof cfg.physicalDepth === 'number' ? cfg.physicalDepth : null;
+  const resolved = resolvePhysicalDimensions({
+    physicalWidth,
+    physicalHeight,
+    physicalDepth,
+    bounds,
+  });
+  const { scale: effectiveScale, estimated: physicalSizeEstimated } = computeModelViewerScale({
+    sceneScale: Number(input.settings.scale),
+    bounds,
+    physicalWidth,
+    physicalHeight,
+    physicalDepth,
+  });
+  const floorAlignment = evaluateFloorAlignment(bounds);
+
   return {
     title: input.project.name,
     description: input.project.description,
@@ -128,14 +182,22 @@ function buildSnapshot(input: {
       animationName: input.settings.animation_name,
       animationAutoplay: Boolean(input.settings.animation_autoplay),
       animationLoop: Boolean(input.settings.animation_loop),
-      physicalWidth: typeof cfg.physicalWidth === 'number' ? cfg.physicalWidth : null,
-      physicalHeight: typeof cfg.physicalHeight === 'number' ? cfg.physicalHeight : null,
-      physicalDepth: typeof cfg.physicalDepth === 'number' ? cfg.physicalDepth : null,
+      physicalWidth: resolved.width,
+      physicalHeight: resolved.height,
+      physicalDepth: resolved.depth,
+      physicalSizeEstimated,
+      effectiveScale,
+      arScaleMode: resolveArScaleMode(cfg.arScaleMode),
     },
-    arModes: input.usdzPublicUrl ? 'webxr scene-viewer quick-look' : 'webxr scene-viewer',
+    modelBounds: bounds,
+    floorAlignmentNotes: floorAlignment.notes,
+    arModes: buildArModes(Boolean(input.usdzPublicUrl)),
     publishedAt: new Date().toISOString(),
   };
 }
+
+/** Exported for snapshot regression tests. */
+export { buildSnapshot };
 
 export async function getActivePublicationForProject(projectId: string): Promise<Publication | null> {
   const client = requireClient();
@@ -255,6 +317,7 @@ export async function publishProject(input: {
   const snapshot = buildSnapshot({
     project: input.project,
     settings: input.settings,
+    model: input.model,
     glbPublicPath,
     glbPublicUrl,
     usdzPublicUrl,

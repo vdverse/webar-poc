@@ -32,6 +32,40 @@
   padding: 8px 12px;
 }
 
+.pv-ar-guide {
+  margin: 0 auto 10px;
+  max-width: 40rem;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(120, 180, 255, 0.12);
+  border: 1px solid rgba(120, 180, 255, 0.35);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.pv-ar-diagnostics {
+  margin: 8px auto 0;
+  max-width: 40rem;
+  font-size: 0.78rem;
+  opacity: 0.75;
+  font-family: ui-monospace, monospace;
+}
+
+.pv-troubleshooting {
+  margin-top: 14px;
+  font-size: 0.88rem;
+  opacity: 0.9;
+}
+
+.pv-troubleshooting ul {
+  margin: 8px 0 0;
+  padding-left: 1.2rem;
+}
+
+.pv-troubleshooting li {
+  margin-bottom: 6px;
+}
+
 .pv-viewer {
   width: 100%;
   height: min(62vh, 640px);

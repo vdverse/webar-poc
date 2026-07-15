@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { computeModelViewerScale, normalizeGlbBounds, parsePhysicalDimensionInput } from '../../features/models/arPlacement';
 import { useProjectQuery } from '../../features/projects/api/projectHooks';
 import { GlbUploader } from '../../features/models/components/GlbUploader';
 import { ModelPreview } from '../../features/models/components/ModelPreview';
@@ -19,12 +20,12 @@ import {
 } from '../../features/models/modelHooks';
 import { buildPublicViewerUrl } from '../../features/models/publishService';
 import { defaultSceneSettings } from '../../features/models/sceneSettingsService';
-import type { SceneSettings } from '../../features/models/types';
+import type { ArScaleMode, SceneSettings } from '../../features/models/types';
 
-function parseOptionalNumber(raw: string): number | null {
-  if (!raw.trim()) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+function parseOptionalPhysical(raw: string): number | null {
+  const parsed = parsePhysicalDimensionInput(raw);
+  if (parsed === 'invalid') return null;
+  return parsed;
 }
 
 export default function ProjectStudioPage() {
@@ -50,6 +51,19 @@ export default function ProjectStudioPage() {
     (project.data && model.data
       ? defaultSceneSettings(project.data.id, project.data.owner_id, model.data.id)
       : null);
+
+  const previewViewerScale = useMemo(() => {
+    if (!effectiveSettings || !model.data) return undefined;
+    const bounds = normalizeGlbBounds(model.data.bounds);
+    const cfg = effectiveSettings.viewer_config ?? {};
+    return computeModelViewerScale({
+      sceneScale: effectiveSettings.scale,
+      bounds,
+      physicalWidth: cfg.physicalWidth ?? null,
+      physicalHeight: cfg.physicalHeight ?? null,
+      physicalDepth: cfg.physicalDepth ?? null,
+    }).scale;
+  }, [effectiveSettings, model.data]);
 
   if (project.isPending || model.isPending) {
     return <div className="dash-skeleton" style={{ minHeight: 240 }} aria-label="Loading studio" />;
@@ -84,9 +98,10 @@ export default function ProjectStudioPage() {
     animation_autoplay: values.animation_autoplay,
     animation_loop: values.animation_loop,
     viewer_config: {
-      physicalWidth: parseOptionalNumber(values.physicalWidth) ?? undefined,
-      physicalHeight: parseOptionalNumber(values.physicalHeight) ?? undefined,
-      physicalDepth: parseOptionalNumber(values.physicalDepth) ?? undefined,
+      physicalWidth: parseOptionalPhysical(values.physicalWidth) ?? undefined,
+      physicalHeight: parseOptionalPhysical(values.physicalHeight) ?? undefined,
+      physicalDepth: parseOptionalPhysical(values.physicalDepth) ?? undefined,
+      arScaleMode: values.arScaleMode,
     },
     updated_at: new Date().toISOString(),
   });
@@ -105,6 +120,7 @@ export default function ProjectStudioPage() {
             src={signed.data ?? null}
             alt={p.name}
             settings={effectiveSettings}
+            viewerScale={previewViewerScale}
           />
           {signed.isError && (
             <div className="dash-error" role="alert">
@@ -129,6 +145,7 @@ export default function ProjectStudioPage() {
             <SceneSettingsForm
               settings={settingsQ.data}
               animationNames={animations}
+              modelBounds={model.data.bounds}
               busy={saveSettings.isPending}
               onChange={(values) => setLiveSettings(applyFormValues(values))}
               onSave={(values) => {
@@ -150,6 +167,7 @@ export default function ProjectStudioPage() {
                   physicalWidth: next.viewer_config.physicalWidth ?? null,
                   physicalHeight: next.viewer_config.physicalHeight ?? null,
                   physicalDepth: next.viewer_config.physicalDepth ?? null,
+                  arScaleMode: (next.viewer_config.arScaleMode as ArScaleMode | undefined) ?? 'fixed',
                 });
               }}
             />
@@ -193,6 +211,7 @@ export default function ProjectStudioPage() {
                     physicalWidth: settings.viewer_config.physicalWidth ?? null,
                     physicalHeight: settings.viewer_config.physicalHeight ?? null,
                     physicalDepth: settings.viewer_config.physicalDepth ?? null,
+                    arScaleMode: settings.viewer_config.arScaleMode ?? 'fixed',
                   });
                 }
                 publish.mutate({

@@ -27,6 +27,9 @@ export interface GeneratedModel {
 export const PLACEMENT_MODES = ['floor', 'wall', 'table'] as const;
 export type PlacementMode = (typeof PLACEMENT_MODES)[number];
 
+export const AR_SCALE_MODES = ['fixed', 'auto'] as const;
+export type ArScaleMode = (typeof AR_SCALE_MODES)[number];
+
 export interface SceneSettings {
   project_id: string;
   owner_id: string;
@@ -46,6 +49,7 @@ export interface SceneSettings {
     physicalWidth?: number;
     physicalHeight?: number;
     physicalDepth?: number;
+    arScaleMode?: ArScaleMode;
     [key: string]: unknown;
   };
   updated_at: string;
@@ -73,7 +77,15 @@ export interface PublicationSnapshot {
     physicalWidth: number | null;
     physicalHeight: number | null;
     physicalDepth: number | null;
+    /** True when physical dimensions were derived from GLB bounds at publish time. */
+    physicalSizeEstimated?: boolean;
+    /** Combined scene + real-world scale factor for model-viewer. */
+    effectiveScale?: number;
+    arScaleMode?: ArScaleMode;
   };
+  /** GLB axis-aligned bounds captured at publish for AR sizing diagnostics. */
+  modelBounds?: GlbBounds | null;
+  floorAlignmentNotes?: string[];
   arModes: string;
   publishedAt: string;
 }

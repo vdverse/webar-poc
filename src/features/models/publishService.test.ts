@@ -6,6 +6,7 @@ import {
   assertCanPublish,
   assertPublishOwnership,
   buildPublicViewerUrl,
+  buildSnapshot,
   makePublicSlug,
 } from './publishService';
 import { ProjectServiceError } from '../projects/api/projectService';
@@ -44,7 +45,13 @@ const model: GeneratedModel = {
   material_count: 1,
   texture_count: 0,
   animation_names: [],
-  bounds: {},
+  bounds: {
+    width: 2,
+    height: 3,
+    depth: 2,
+    min: [-1, 0, -1],
+    max: [1, 3, 1],
+  },
   metadata: {},
   processing_status: 'ready',
   created_at: '2026-01-01T00:00:00Z',
@@ -135,6 +142,54 @@ describe('publish helpers', () => {
     });
     expect(path).toBe(`${project.id}/1/model.glb`);
     expect(path.split('/')[0]).toBe(project.id);
+  });
+
+  it('rejects invalid physical dimensions at publish time', () => {
+    expect(() =>
+      assertCanPublish({
+        project,
+        model,
+        settings: {
+          ...settings,
+          viewer_config: { physicalHeight: -1 },
+        },
+      }),
+    ).toThrow(/invalid physical size/i);
+  });
+
+  it('builds snapshot with finite positive scale and ordered AR modes', () => {
+    const snapshot = buildSnapshot({
+      project,
+      settings: {
+        ...settings,
+        viewer_config: { physicalHeight: 0.3, arScaleMode: 'fixed' },
+      },
+      model,
+      glbPublicPath: `${project.id}/1/model.glb`,
+      glbPublicUrl: 'https://example.com/model.glb',
+      usdzPublicUrl: null,
+    });
+    expect(snapshot.arModes).toBe('webxr scene-viewer');
+    expect(snapshot.scene.placementMode).toBe('floor');
+    expect(snapshot.scene.arScaleMode).toBe('fixed');
+    expect(Number.isFinite(snapshot.scene.effectiveScale!)).toBe(true);
+    expect(snapshot.scene.effectiveScale!).toBeGreaterThan(0);
+    expect(snapshot.scene.physicalHeight).toBe(0.3);
+    expect(snapshot.modelBounds?.height).toBe(3);
+  });
+
+  it('estimates physical size when creator dimensions are absent', () => {
+    const snapshot = buildSnapshot({
+      project,
+      settings,
+      model,
+      glbPublicPath: `${project.id}/1/model.glb`,
+      glbPublicUrl: 'https://example.com/model.glb',
+      usdzPublicUrl: null,
+    });
+    expect(snapshot.scene.physicalSizeEstimated).toBe(true);
+    expect(snapshot.scene.physicalHeight).toBeGreaterThan(0);
+    expect(snapshot.scene.effectiveScale).toBeGreaterThan(0);
   });
 });
 

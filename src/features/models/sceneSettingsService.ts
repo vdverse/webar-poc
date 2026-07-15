@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabaseClient';
 import { ProjectServiceError } from '../projects/api/projectService';
-import type { PlacementMode, SceneSettings } from './types';
+import type { ArScaleMode, PlacementMode, SceneSettings } from './types';
 
 function requireClient() {
   if (!supabase) {
@@ -42,6 +42,7 @@ export interface SceneSettingsInput {
   physicalWidth?: number | null;
   physicalHeight?: number | null;
   physicalDepth?: number | null;
+  arScaleMode?: ArScaleMode;
 }
 
 export function defaultSceneSettings(
@@ -64,7 +65,7 @@ export function defaultSceneSettings(
     animation_name: null,
     animation_autoplay: true,
     animation_loop: true,
-    viewer_config: {},
+    viewer_config: { arScaleMode: 'fixed' },
     updated_at: new Date().toISOString(),
   };
 }
@@ -84,10 +85,22 @@ export async function getSceneSettings(projectId: string): Promise<SceneSettings
 export async function upsertSceneSettings(input: SceneSettingsInput): Promise<SceneSettings> {
   const client = requireClient();
   const userId = await requireUserId();
+
+  for (const [label, raw] of [
+    ['physical width', input.physicalWidth],
+    ['physical height', input.physicalHeight],
+    ['physical depth', input.physicalDepth],
+  ] as const) {
+    if (raw != null && !Number.isFinite(raw)) {
+      throw requestFailed(`Invalid ${label}`);
+    }
+  }
+
   const viewer_config = {
     physicalWidth: input.physicalWidth ?? undefined,
     physicalHeight: input.physicalHeight ?? undefined,
     physicalDepth: input.physicalDepth ?? undefined,
+    arScaleMode: input.arScaleMode === 'auto' ? 'auto' : 'fixed',
   };
 
   const row = {
