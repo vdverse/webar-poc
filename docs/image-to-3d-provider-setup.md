@@ -4,57 +4,63 @@ Supabase project: `codqgrxradxaloruoyys`
 
 ## Secrets (server only — never `VITE_*`)
 
-```bash
-supabase secrets set \
-  IMAGE_TO_3D_PROVIDER=meshy \
-  IMAGE_TO_3D_API_KEY=YOUR_MESHY_KEY \
-  IMAGE_TO_3D_WEBHOOK_SECRET=optional-random \
-  --project-ref codqgrxradxaloruoyys
+| Secret | Status (2026-07-16) |
+|--------|---------------------|
+| `IMAGE_TO_3D_PROVIDER=meshy` | Configured |
+| `IMAGE_TO_3D_ALLOW_MOCK=false` | Configured |
+| `IMAGE_TO_3D_API_KEY` | **Required — not yet in Supabase secrets** |
+| `IMAGE_TO_3D_WEBHOOK_SECRET` | Optional (polling used in v1) |
+
+### Set the Meshy key (you)
+
+1. Copy `.env.meshy.local.example` → `.env.meshy.local` (gitignored).
+2. Add one line: `IMAGE_TO_3D_API_KEY=msy_…` (your real key — never commit).
+3. Run:
+
+```powershell
+powershell -File scripts/set-meshy-secrets.ps1
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` / `SUPABASE_ANON_KEY` are
-injected automatically for Edge Functions.
-
-### Development mock (local / non-prod only)
+Or manually:
 
 ```bash
-supabase secrets set \
-  IMAGE_TO_3D_PROVIDER=mock \
-  IMAGE_TO_3D_ALLOW_MOCK=true \
-  --project-ref codqgrxradxaloruoyys
+supabase secrets set IMAGE_TO_3D_API_KEY=YOUR_KEY --project-ref codqgrxradxaloruoyys
 ```
 
-Do **not** leave `IMAGE_TO_3D_ALLOW_MOCK=true` on production with real traffic
-expecting AI quality — the mock re-hosts a Khronos sample GLB.
+Verify names only:
+
+```bash
+supabase secrets list --project-ref codqgrxradxaloruoyys
+```
 
 ## Deploy functions
 
 ```bash
-supabase functions deploy create-generation-job \
-  get-generation-status cancel-generation-job process-generation-result \
-  --project-ref codqgrxradxaloruoyys
+supabase functions deploy create-generation-job get-generation-status cancel-generation-job process-generation-result --project-ref codqgrxradxaloruoyys
 ```
 
-## Apply migration
+Deployed 2026-07-16 (Batch 3B Meshy adapter + data-URI delivery).
 
-```bash
-supabase db push --project-ref codqgrxradxaloruoyys
-# or apply 0015_generation_job_hardening.sql via SQL editor
-```
+## Migration
+
+`0015_generation_job_hardening.sql` applied remotely via `supabase db push`.
+
+## Live test scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/prepare-meshy-source-project.mjs` | Creates single_image project + JPEG (service role) |
+| `scripts/live-meshy-generate.mjs` | One paid generation + poll (uses `.env.batch3b.local` or validation user) |
+| `scripts/set-meshy-secrets.ps1` | Uploads key from `.env.meshy.local` without printing it |
+
+## Meshy API notes (official docs)
+
+- Single: `POST /openapi/v1/image-to-3d` → poll `GET …/image-to-3d/:id`
+- Multi: `POST /openapi/v1/multi-image-to-3d` (1–4 images) → poll `GET …/multi-image-to-3d/:id`
+- Input formats: **JPEG/PNG only** (WebP rejected)
+- Result: `model_urls.glb` on `assets.meshy.ai` (expiring — re-hosted privately)
 
 ## Credits
 
-Free profiles start with `profiles.generation_credits = 1` (migration 0002).
-Each successful job submit decrements credits server-side. Top up for testing:
-
-```sql
-update public.profiles set generation_credits = 10 where id = '<your-user-uuid>';
-```
-
-## Batch 3B checklist (you)
-
-1. Create Meshy account with API access (Pro+ per Meshy docs).
-2. Create API key → set `IMAGE_TO_3D_API_KEY`.
-3. Set `IMAGE_TO_3D_PROVIDER=meshy`.
-4. Deploy functions + migration 0015.
-5. Upload a photo project → Generate → wait → Open GLB Studio → Publish → AR.
+Server decrements `profiles.generation_credits` only after Meshy **accepts** the job.
+Failed submit (e.g. missing API key) does **not** consume a credit (verified 2026-07-16).

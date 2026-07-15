@@ -45,7 +45,9 @@ Deno.serve(async (req) => {
     if (job.external_job_id) {
       try {
         const provider = getImageTo3DProvider();
-        await provider.cancelJob?.(job.external_job_id);
+        await provider.cancelJob?.(job.external_job_id, {
+          inputMode: job.input_mode === 'multi_view' ? 'multi_view' : 'single_image',
+        });
       } catch {
         // Best-effort cancel at provider; still mark locally cancelled.
       }

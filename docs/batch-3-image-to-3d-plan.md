@@ -4,8 +4,7 @@
 (`Improve markerless AR surface placement and physical scale.`)  
 Branch: `feature/batch-2-project-wizard` (already on origin).
 
-**Batch 3A commit:** `a0d7605`  
-(`feat: add Batch 3A image-to-3D architecture with mock provider`)
+**Batch 3B (in progress):** Meshy adapter aligned to official API; migration 0015 applied; Edge Functions deployed. **Blocked on `IMAGE_TO_3D_API_KEY` in Supabase secrets** for live image→GLB→studio→AR.
 
 **Dirty working-tree resolution (2026-07-16):** Uncommitted changes were an
 unexplained full *reverse* of `8f8175c` (~923 lines deleted). They did **not**

@@ -85,4 +85,24 @@ describe('Meshy status mapping', () => {
     expect(mapMeshyStatus('SUCCEEDED')).toBe('completed');
     expect(mapMeshyStatus('CANCELED')).toBe('cancelled');
   });
+
+  it('maps honest stages from progress bands', () => {
+    expect(mapMeshyStage('PENDING')).toBe('Waiting in queue');
+    expect(mapMeshyStage('IN_PROGRESS', 80)).toBe('Applying textures');
+    expect(mapMeshyStage('IN_PROGRESS', 20)).toBe('Building geometry');
+  });
 });
+
+function mapMeshyStage(raw: string | undefined, progress?: number): string {
+  switch (raw) {
+    case 'PENDING':
+      return 'Waiting in queue';
+    case 'IN_PROGRESS':
+      if (typeof progress === 'number' && progress >= 70) return 'Applying textures';
+      return 'Building geometry';
+    case 'SUCCEEDED':
+      return 'Complete';
+    default:
+      return 'Processing';
+  }
+}

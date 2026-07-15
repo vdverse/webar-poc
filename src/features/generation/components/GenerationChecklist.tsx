@@ -15,8 +15,10 @@ export function GenerationChecklist({ multiView }: { multiView: boolean }) {
         ))}
       </ul>
       <p className="dash-page-sub">
-        Preferred formats: JPEG, PNG or WebP. Single image max 15 MB (shortest side ideally
-        ≥ 1024 px). Multi-view: 2–12 photos, 10 MB each, consistent lighting, distinct angles.
+        Preferred formats for Meshy: JPEG or PNG (WebP is not accepted by the
+        provider). Single image max 15 MB (shortest side ideally ≥ 1024 px).
+        Multi-view: 2–4 photos recommended for Meshy (max 4), 10 MB each,
+        consistent lighting, distinct angles.
       </p>
     </div>
   );

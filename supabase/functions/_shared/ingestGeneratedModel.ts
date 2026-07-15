@@ -18,19 +18,37 @@ export async function ingestCompletedModel(input: {
   modelUrl: string;
   providerMetadata: Record<string, unknown>;
 }): Promise<{ job: Record<string, unknown>; model: Record<string, unknown> }> {
-  // Idempotent: if already completed with a model, return it.
-  if (input.job.status === 'completed') {
+  // Idempotent: if a model already exists for this job, return it.
+  {
     const { data: existing } = await input.service
       .from('generated_models')
       .select('*')
       .eq('generation_job_id', input.job.id)
       .maybeSingle();
-    const { data: jobRow } = await input.service
-      .from('generation_jobs')
-      .select('*')
-      .eq('id', input.job.id)
-      .single();
-    if (existing && jobRow) return { job: jobRow, model: existing };
+    if (existing) {
+      const { data: jobRow } = await input.service
+        .from('generation_jobs')
+        .select('*')
+        .eq('id', input.job.id)
+        .single();
+      if (jobRow?.status !== 'completed') {
+        await input.service
+          .from('generation_jobs')
+          .update({
+            status: 'completed',
+            stage: 'Complete',
+            progress: 100,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', input.job.id);
+      }
+      const { data: freshJob } = await input.service
+        .from('generation_jobs')
+        .select('*')
+        .eq('id', input.job.id)
+        .single();
+      return { job: freshJob ?? jobRow!, model: existing };
+    }
   }
 
   if (!isAllowedResultUrl(input.modelUrl)) {

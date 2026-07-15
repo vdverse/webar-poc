@@ -17,7 +17,7 @@ export interface CreateGenerationInput {
   projectId: string;
   ownerId: string;
   inputMode: GenerationInputMode;
-  /** Short-lived signed HTTPS URLs only — never permanent public paths. */
+  /** Data URIs or short-lived HTTPS URLs Meshy can fetch (jpg/png). */
   imageUrls: string[];
   prompt?: string;
   negativePrompt?: string;
@@ -42,8 +42,14 @@ export interface ProviderStatusResult {
 export interface ImageTo3DProvider {
   name: string;
   createJob(input: CreateGenerationInput): Promise<ProviderCreateResult>;
-  getJobStatus(externalJobId: string): Promise<ProviderStatusResult>;
-  cancelJob?(externalJobId: string): Promise<void>;
+  getJobStatus(
+    externalJobId: string,
+    opts?: { inputMode?: GenerationInputMode },
+  ): Promise<ProviderStatusResult>;
+  cancelJob?(
+    externalJobId: string,
+    opts?: { inputMode?: GenerationInputMode },
+  ): Promise<void>;
 }
 
 export class ProviderError extends Error {

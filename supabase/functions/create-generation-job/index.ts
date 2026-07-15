@@ -1,11 +1,8 @@
-import {
-  SIGNED_URL_TTL_SECONDS,
-  sha256Hex,
-  validateImageCounts,
-} from '../_shared/generationValidation.ts';
+import { sha256Hex, validateImageCounts, MESHY_MULTI_MAX_IMAGES } from '../_shared/generationValidation.ts';
 import { getImageTo3DProvider } from '../_shared/providers/providerFactory.ts';
 import { ProviderError } from '../_shared/providers/types.ts';
 import { mapSafeError } from '../_shared/safeErrors.ts';
+import { bytesToDataUri } from '../_shared/sourceImageDataUri.ts';
 import {
   corsHeaders,
   getServiceClient,
@@ -52,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: images, error: imagesError } = await service
       .from('project_source_images')
-      .select('id, storage_path, sort_order')
+      .select('id, storage_path, sort_order, mime_type')
       .eq('project_id', body.projectId)
       .order('sort_order', { ascending: true });
 
@@ -62,6 +59,21 @@ Deno.serve(async (req) => {
     const countError = validateImageCounts(project.source_method, images?.length ?? 0);
     if (countError) {
       return jsonResponse({ ...mapSafeError(countError) }, 400, headers);
+    }
+
+    // Meshy multi-image API hard-caps at 4 images (official docs).
+    if (
+      project.source_method === 'multi_view' &&
+      (images?.length ?? 0) > MESHY_MULTI_MAX_IMAGES
+    ) {
+      return jsonResponse(
+        {
+          ...mapSafeError('invalid-images'),
+          message: `Meshy accepts at most ${MESHY_MULTI_MAX_IMAGES} photos for multi-image generation.`,
+        },
+        400,
+        headers,
+      );
     }
 
     const { data: active } = await service
@@ -105,15 +117,46 @@ Deno.serve(async (req) => {
       return jsonResponse({ ...mapSafeError(code) }, 503, headers);
     }
 
+    // Prefer data URIs for smaller files (Meshy docs allow them). Larger images
+    // use short-lived signed HTTPS URLs Meshy can fetch from the public internet.
+    const DATA_URI_MAX_BYTES = 3.5 * 1024 * 1024;
     const imageUrls: string[] = [];
-    for (const img of images ?? []) {
-      const { data: signed, error: signError } = await service.storage
-        .from(SOURCE_BUCKET)
-        .createSignedUrl(img.storage_path, SIGNED_URL_TTL_SECONDS);
-      if (signError || !signed?.signedUrl) {
-        return jsonResponse({ ...mapSafeError('invalid-images') }, 400, headers);
+    try {
+      for (const img of images ?? []) {
+        const mime = (img.mime_type ?? '').toLowerCase();
+        if (mime !== 'image/jpeg' && mime !== 'image/png') {
+          return jsonResponse(
+            {
+              ...mapSafeError('invalid-images'),
+              message: 'Meshy accepts JPEG and PNG only. Re-upload without WebP.',
+            },
+            400,
+            headers,
+          );
+        }
+        const { data: blob, error: dlError } = await service.storage
+          .from(SOURCE_BUCKET)
+          .download(img.storage_path);
+        if (dlError || !blob) {
+          return jsonResponse({ ...mapSafeError('invalid-images') }, 400, headers);
+        }
+        const size = blob.size;
+        if (size <= DATA_URI_MAX_BYTES) {
+          const buf = new Uint8Array(await blob.arrayBuffer());
+          imageUrls.push(bytesToDataUri(mime, buf));
+        } else {
+          const { data: signed, error: signError } = await service.storage
+            .from(SOURCE_BUCKET)
+            .createSignedUrl(img.storage_path, 15 * 60);
+          if (signError || !signed?.signedUrl) {
+            return jsonResponse({ ...mapSafeError('invalid-images') }, 400, headers);
+          }
+          imageUrls.push(signed.signedUrl);
+        }
       }
-      imageUrls.push(signed.signedUrl);
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? 'invalid-images';
+      return jsonResponse({ ...mapSafeError(code) }, 400, headers);
     }
 
     const { data: job, error: insertError } = await service
@@ -131,6 +174,7 @@ Deno.serve(async (req) => {
         request_payload: {
           image_count: imageUrls.length,
           input_mode: project.source_method,
+          delivery: 'data_uri',
         },
         started_at: new Date().toISOString(),
       })
@@ -166,10 +210,12 @@ Deno.serve(async (req) => {
         return jsonResponse({ ...mapSafeError('database-failed') }, 500, headers);
       }
 
+      // Credit consumed only after Meshy accepts the job (not on duplicate 409).
       await service
         .from('profiles')
         .update({ generation_credits: Math.max(0, credits - 1) })
-        .eq('id', userId);
+        .eq('id', userId)
+        .eq('generation_credits', credits);
 
       await service
         .from('ar_projects')

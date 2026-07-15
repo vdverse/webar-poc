@@ -1,31 +1,46 @@
 # Generation live testing
 
-## Batch 3A (no paid key)
+## Batch 3B status (2026-07-16)
 
-1. Apply migration `0015`.
-2. Deploy Edge Functions.
-3. Set mock secrets (`IMAGE_TO_3D_PROVIDER=mock`, `IMAGE_TO_3D_ALLOW_MOCK=true`).
-4. Sign in → create single-image project → upload photo → save.
-5. Click **Generate 3D model**.
-6. Poll until Complete (mock uses a Khronos sample GLB).
-7. **Open GLB Studio** → publish → QR → Android AR (existing path).
-8. Confirm `/dev/ar-proof` and direct GLB upload still work.
-9. Disable mock before expecting real AI quality.
+| Step | Result |
+|------|--------|
+| Migration 0015 | Applied remotely |
+| Edge Functions | Deployed (Meshy adapter + ingestion) |
+| `IMAGE_TO_3D_PROVIDER=meshy` | Set |
+| `IMAGE_TO_3D_API_KEY` | **Not set in Supabase — live Meshy blocked** |
+| Test project prepared | `593fea53-623b-44f5-ab25-701501c3d008` (single JPEG, 36 KB) |
+| Dry-run create job | Failed `provider-not-configured`; credits unchanged (3) |
+| Real Meshy GLB | **Pending API key + one live run** |
+| Studio / publish / QR / AR | **Pending real GLB** |
 
-## Batch 3B (real Meshy)
+### After you set `IMAGE_TO_3D_API_KEY`
 
-1. Replace secrets with Meshy key.
-2. Generate from a real product photo.
-3. Confirm provider job id stored, private GLB ingested, studio + AR.
+1. `node scripts/live-meshy-generate.mjs` (uses `.env.batch3b.local` from prepare script).
+2. Open studio → publish → scan QR on Android.
+3. Fill the manual section below.
 
-Do not mark Batch 3 complete until step 3 of Batch 3B succeeds on a phone.
+## Batch 3A (mock)
 
-## Manual real-provider validation (fill after first live run)
+Mock path remains behind `IMAGE_TO_3D_ALLOW_MOCK=true` — disabled on production project.
 
-- Date:
-- Meshy task id:
-- Internal job id:
-- File size:
-- Studio OK:
-- Publish slug:
-- Android AR OK:
+## Manual real-provider validation
+
+- Date: 2026-07-16 (partial — infra only)
+- Meshy task id: _pending_
+- Internal job id: `9c2d56f2-…` (failed — no API key; redacted)
+- Credits before/after dry-run: 3 / 3
+- File size: _pending_
+- Studio OK: _pending_
+- Publish slug: _pending_
+- Android AR OK: **Not tested — awaiting your phone confirmation**
+
+## Android AR checklist (for you)
+
+1. Display QR on desktop after publishing Meshy-generated project.
+2. Scan with Android phone (Chrome).
+3. Confirm no login.
+4. Confirm generated 3D model loads.
+5. Tap **View in your space**.
+6. Detect floor/table → place model.
+7. Walk around; verify scale.
+8. Reply **Android AR Pass** or describe failure.

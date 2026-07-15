@@ -53,7 +53,9 @@ Deno.serve(async (req) => {
     let providerStatus;
     try {
       const provider = getImageTo3DProvider();
-      providerStatus = await provider.getJobStatus(job.external_job_id);
+      providerStatus = await provider.getJobStatus(job.external_job_id, {
+        inputMode: job.input_mode === 'multi_view' ? 'multi_view' : 'single_image',
+      });
     } catch (e) {
       const code = e instanceof ProviderError ? e.code : 'provider-status-failed';
       return jsonResponse({ ...mapSafeError(code), job: sanitizeJob(job) }, 200, headers);
