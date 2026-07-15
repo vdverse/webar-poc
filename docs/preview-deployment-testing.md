@@ -63,6 +63,8 @@ Site URL can remain localhost for development, or be set to
 | `/ar-demo/target.jpg` | Pass (`image/jpeg`) |
 | Supabase URL baked into bundle | Pass |
 | `VITE_PUBLIC_APP_URL` is preview origin (not localhost) | Pass |
+
+See also `docs/publication-url-and-republish.md` for republish / QR origin rules.
 | HTTPS | Pass |
 
 ## Creator acceptance (one account)

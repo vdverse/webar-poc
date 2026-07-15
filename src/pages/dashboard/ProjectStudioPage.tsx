@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { env } from '../../lib/env';
 import { computeModelViewerScale, normalizeGlbBounds, parsePhysicalDimensionInput } from '../../features/models/arPlacement';
 import { useProjectQuery } from '../../features/projects/api/projectHooks';
 import { GlbUploader } from '../../features/models/components/GlbUploader';
@@ -182,12 +183,21 @@ export default function ProjectStudioPage() {
           {saveSettings.isSuccess && <p className="dash-field-hint">Settings saved.</p>}
 
           <h2 style={{ marginTop: 28 }}>3. Publish</h2>
+          {import.meta.env.DEV && env.VITE_PUBLIC_APP_URL?.includes('localhost') && (
+            <p className="dash-field-hint" role="note">
+              QR codes will use localhost because VITE_PUBLIC_APP_URL points at localhost.
+              For Vercel QRs set it to https://webar-poc-one.vercel.app; for phone testing on
+              this LAN set it to your Network HTTPS origin (e.g. https://192.168.1.207:5173)
+              and restart the dev server.
+            </p>
+          )}
           <button
             type="button"
             className="dash-button"
             disabled={!model.data || publish.isPending || saveSettings.isPending}
+            aria-busy={publish.isPending || undefined}
             onClick={() => {
-              if (!model.data) return;
+              if (!model.data || publish.isPending) return;
               const settingsForPublish =
                 settingsQ.data ??
                 liveSettings ??

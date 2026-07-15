@@ -12,6 +12,7 @@ import {
   resolveArScaleMode,
   resolvePhysicalDimensions,
 } from './arPlacement';
+import { resolvePublicAppOrigin } from './publicAppOrigin';
 import type { GeneratedModel, Publication, PublicationSnapshot, SceneSettings } from './types';
 
 const PRIVATE_BUCKET = 'generated-models-private';
@@ -40,8 +41,23 @@ function stage(label: string, detail?: string) {
   }
 }
 
-function requestFailed(context: string, detail?: string): ProjectServiceError {
-  if (import.meta.env.DEV && detail) {
+function logSupabaseFailure(stageLabel: string, error: { code?: string; message?: string; details?: string; hint?: string } | null | undefined) {
+  if (!import.meta.env.DEV || !error) return;
+  console.error(`[publish] ${stageLabel}`, {
+    code: error.code ?? null,
+    message: error.message ?? null,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+  });
+}
+
+function requestFailed(
+  context: string,
+  detail?: string,
+  supabaseError?: { code?: string; message?: string; details?: string; hint?: string } | null,
+): ProjectServiceError {
+  logSupabaseFailure(context, supabaseError ?? (detail ? { message: detail } : null));
+  if (import.meta.env.DEV && detail && !supabaseError) {
     console.error(`[publish] ${context}:`, detail);
   }
   return new ProjectServiceError('request-failed', `${context}. Please try again.`);
@@ -53,12 +69,18 @@ export function publicObjectUrl(storagePath: string): string {
   return `${base}/storage/v1/object/public/${PUBLIC_BUCKET}/${storagePath}`;
 }
 
-/** Absolute URL for the public viewer page (what the QR encodes). */
+/**
+ * Absolute URL for the public viewer page (what the QR encodes).
+ * Uses VITE_PUBLIC_APP_URL when set; never persists this into publications —
+ * only the slug is stored; the origin is resolved at display/publish time.
+ */
 export function buildPublicViewerUrl(publicSlug: string, originOverride?: string): string {
-  const origin = (originOverride || env.VITE_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(
-    /\/$/,
-    '',
-  );
+  const origin = resolvePublicAppOrigin({
+    originOverride,
+    configured: env.VITE_PUBLIC_APP_URL,
+    windowOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    isProd: Boolean(import.meta.env.PROD),
+  });
   const basename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
   return `${origin}${basename}/view/${publicSlug}`;
 }
@@ -135,6 +157,21 @@ export function makePublicSlug(projectName: string, projectId: string): string {
   return slug;
 }
 
+/** Prefer any prior slug for this project (including inactive) so republish stays stable. */
+export function pickStablePublicSlug(input: {
+  projectName: string;
+  projectId: string;
+  priorSlug: string | null | undefined;
+}): string {
+  if (input.priorSlug && isValidSlug(input.priorSlug)) return input.priorSlug;
+  return makePublicSlug(input.projectName, input.projectId);
+}
+
+export function nextPublicationVersion(latestVersion: number | null | undefined): number {
+  const n = typeof latestVersion === 'number' && Number.isFinite(latestVersion) ? latestVersion : 0;
+  return Math.max(0, Math.floor(n)) + 1;
+}
+
 function buildSnapshot(input: {
   project: ArProject;
   settings: SceneSettings;
@@ -208,7 +245,7 @@ export async function getActivePublicationForProject(projectId: string): Promise
     .eq('project_id', projectId)
     .eq('is_active', true)
     .maybeSingle();
-  if (error) throw requestFailed('Loading publication failed', error.message);
+  if (error) throw requestFailed('Loading publication failed', error.message, error);
   return (data as Publication | null) ?? null;
 }
 
@@ -221,7 +258,7 @@ export async function getActivePublicationBySlug(publicSlug: string): Promise<Pu
     .eq('public_slug', publicSlug)
     .eq('is_active', true)
     .maybeSingle();
-  if (error) throw requestFailed('Loading the public experience failed', error.message);
+  if (error) throw requestFailed('Loading the public experience failed', error.message, error);
   return (data as Publication | null) ?? null;
 }
 
@@ -230,10 +267,9 @@ export async function getActivePublicationBySlug(publicSlug: string): Promise<Pu
  * an immutable snapshot. QR codes must encode buildPublicViewerUrl(slug) —
  * never a private signed URL.
  *
- * Order: validate → upload public GLB → snapshot → deactivate prior → insert
- * publication → mark project published. Project is never marked published if
- * the public upload or publication insert fails. Best-effort cleanup removes
- * an orphaned public object if the DB insert fails after upload.
+ * Republish: stable public_slug, version = max(version)+1, assets under
+ * {projectId}/{version}/model.glb. Viewer URL is derived at runtime from
+ * VITE_PUBLIC_APP_URL + slug (not baked as a localhost absolute URL).
  */
 export async function publishProject(input: {
   project: ArProject;
@@ -258,30 +294,36 @@ export async function publishProject(input: {
   stage('3 load publication history');
   const { data: priorRows, error: priorError } = await client
     .from('publications')
-    .select('version')
+    .select('id, version, public_slug, is_active')
     .eq('project_id', input.project.id)
-    .order('version', { ascending: false })
-    .limit(1);
-  if (priorError) throw requestFailed('Checking publication history failed', priorError.message);
+    .order('version', { ascending: false });
+  if (priorError) {
+    throw requestFailed('Checking publication history failed', priorError.message, priorError);
+  }
 
-  const nextVersion = (priorRows?.[0]?.version ?? 0) + 1;
-  const publicSlug =
-    (await getActivePublicationForProject(input.project.id))?.public_slug ??
-    makePublicSlug(input.project.name, input.project.id);
+  const latestVersion = priorRows?.[0]?.version ?? 0;
+  const nextVersion = nextPublicationVersion(latestVersion);
+  const priorActive = (priorRows ?? []).find((r) => r.is_active) ?? null;
+  const priorSlug = (priorRows ?? []).find((r) => r.public_slug)?.public_slug ?? null;
+  const publicSlug = pickStablePublicSlug({
+    projectName: input.project.name,
+    projectId: input.project.id,
+    priorSlug,
+  });
 
   const glbPublicPath = publishedAssetPath({
     projectId: input.project.id,
     publicationVersion: nextVersion,
     file: 'model.glb',
   });
-  stage('4 public path ready', `v${nextVersion} segments=${glbPublicPath.split('/').length}`);
+  stage('4 public path ready', `v${nextVersion} slug=${publicSlug}`);
 
   stage('5 download private GLB');
   const { data: blob, error: downloadError } = await client.storage
     .from(PRIVATE_BUCKET)
     .download(input.model.glb_storage_path);
   if (downloadError || !blob) {
-    throw requestFailed('Reading the private GLB failed', downloadError?.message);
+    throw requestFailed('Reading the private GLB failed', downloadError?.message, downloadError);
   }
 
   stage('6 upload public GLB');
@@ -290,12 +332,13 @@ export async function publishProject(input: {
     upsert: true,
   });
   if (uploadError) {
-    throw requestFailed('Publishing the GLB failed', uploadError.message);
+    throw requestFailed('Publishing the GLB failed', uploadError.message, uploadError);
   }
 
   let usdzPublicUrl: string | null = null;
+  let usdzPublicPath: string | null = null;
   if (input.model.usdz_storage_path) {
-    const usdzPath = publishedAssetPath({
+    usdzPublicPath = publishedAssetPath({
       projectId: input.project.id,
       publicationVersion: nextVersion,
       file: 'model.usdz',
@@ -304,11 +347,11 @@ export async function publishProject(input: {
       .from(PRIVATE_BUCKET)
       .download(input.model.usdz_storage_path);
     if (!usdzDl && usdzBlob) {
-      const { error: usdzUp } = await client.storage.from(PUBLIC_BUCKET).upload(usdzPath, usdzBlob, {
+      const { error: usdzUp } = await client.storage.from(PUBLIC_BUCKET).upload(usdzPublicPath, usdzBlob, {
         contentType: 'model/vnd.usdz+zip',
         upsert: true,
       });
-      if (!usdzUp) usdzPublicUrl = publicObjectUrl(usdzPath);
+      if (!usdzUp) usdzPublicUrl = publicObjectUrl(usdzPublicPath);
     }
   }
 
@@ -323,6 +366,19 @@ export async function publishProject(input: {
     usdzPublicUrl,
   });
 
+  const cleanupOrphanAssets = async () => {
+    const paths = [glbPublicPath, usdzPublicPath].filter(Boolean) as string[];
+    if (paths.length) {
+      await client.storage.from(PUBLIC_BUCKET).remove(paths);
+    }
+  };
+
+  const restorePriorActive = async () => {
+    if (priorActive?.id) {
+      await client.from('publications').update({ is_active: true }).eq('id', priorActive.id);
+    }
+  };
+
   stage('8 deactivate prior publications');
   const { error: deactivateError } = await client
     .from('publications')
@@ -330,8 +386,8 @@ export async function publishProject(input: {
     .eq('project_id', input.project.id)
     .eq('is_active', true);
   if (deactivateError) {
-    await client.storage.from(PUBLIC_BUCKET).remove([glbPublicPath]);
-    throw requestFailed('Updating prior publications failed', deactivateError.message);
+    await cleanupOrphanAssets();
+    throw requestFailed('Updating prior publications failed', deactivateError.message, deactivateError);
   }
 
   stage('9 insert publication row');
@@ -349,8 +405,9 @@ export async function publishProject(input: {
     .single();
 
   if (insertError || !publication) {
-    await client.storage.from(PUBLIC_BUCKET).remove([glbPublicPath]);
-    throw requestFailed('Creating the publication failed', insertError?.message);
+    await cleanupOrphanAssets();
+    await restorePriorActive();
+    throw requestFailed('Creating the publication failed', insertError?.message, insertError);
   }
 
   stage('10 update project published status');
@@ -362,7 +419,7 @@ export async function publishProject(input: {
   if (projectUpdateError) {
     // Publication row already exists; surface the error but do not delete the
     // public asset — the viewer can still serve the active snapshot.
-    throw requestFailed('Updating the project status failed', projectUpdateError.message);
+    throw requestFailed('Updating the project status failed', projectUpdateError.message, projectUpdateError);
   }
 
   const viewerUrl = buildPublicViewerUrl(publicSlug);

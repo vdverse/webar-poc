@@ -8,6 +8,8 @@ import {
   buildPublicViewerUrl,
   buildSnapshot,
   makePublicSlug,
+  nextPublicationVersion,
+  pickStablePublicSlug,
 } from './publishService';
 import { ProjectServiceError } from '../projects/api/projectService';
 import { publishedAssetPath } from '../../lib/storagePaths';
@@ -86,8 +88,52 @@ describe('publish helpers', () => {
 
   it('builds a public viewer URL that uses /view/:slug only', () => {
     const url = buildPublicViewerUrl('red-chair-11111111', 'https://example.com/app');
-    expect(url).toBe('https://example.com/app/view/red-chair-11111111');
+    expect(url).toBe('https://example.com/view/red-chair-11111111');
     expect(url).not.toMatch(/signed|token|storage/i);
+  });
+
+  it('builds production QR target from Vercel origin override', () => {
+    const url = buildPublicViewerUrl('test-5e25fec4', 'https://webar-poc-one.vercel.app/');
+    expect(url).toBe('https://webar-poc-one.vercel.app/view/test-5e25fec4');
+    expect(url).not.toMatch(/localhost/);
+  });
+
+  it('builds LAN QR target from configured LAN origin', () => {
+    const url = buildPublicViewerUrl('test-5e25fec4', 'https://192.168.1.207:5173');
+    expect(url).toBe('https://192.168.1.207:5173/view/test-5e25fec4');
+  });
+
+  it('increments publication version from the latest row', () => {
+    expect(nextPublicationVersion(null)).toBe(1);
+    expect(nextPublicationVersion(1)).toBe(2);
+    expect(nextPublicationVersion(7)).toBe(8);
+  });
+
+  it('keeps a stable public slug across republish', () => {
+    expect(
+      pickStablePublicSlug({
+        projectName: 'test',
+        projectId: '5e25fec4-6c74-4316-a795-b1bbe8993069',
+        priorSlug: 'test-5e25fec4',
+      }),
+    ).toBe('test-5e25fec4');
+    expect(
+      pickStablePublicSlug({
+        projectName: 'test',
+        projectId: '5e25fec4-6c74-4316-a795-b1bbe8993069',
+        priorSlug: null,
+      }),
+    ).toBe('test-5e25fec4');
+  });
+
+  it('documents versioned public asset paths for republish', () => {
+    expect(
+      publishedAssetPath({
+        projectId: '5e25fec4-6c74-4316-a795-b1bbe8993069',
+        publicationVersion: 2,
+        file: 'model.glb',
+      }),
+    ).toBe('5e25fec4-6c74-4316-a795-b1bbe8993069/2/model.glb');
   });
 
   it('rejects publish without a ready GLB', () => {
@@ -202,5 +248,17 @@ describe('published-assets RLS migration', () => {
     expect(sql).toMatch(/storage\.foldername\(storage\.objects\.name\)/);
     expect(sql).not.toMatch(/storage\.foldername\(p\.name\)/);
     expect(sql).not.toMatch(/storage\.foldername\(name\)/);
+  });
+});
+
+describe('stable publication slug migration', () => {
+  it('replaces global unique public_slug with active-only partial unique index', () => {
+    const sql = readFileSync(
+      join(process.cwd(), 'supabase/migrations/0016_stable_publication_slug.sql'),
+      'utf8',
+    );
+    expect(sql).toMatch(/drop constraint if exists publications_public_slug_key/i);
+    expect(sql).toMatch(/publications_one_active_per_slug/);
+    expect(sql).toMatch(/where is_active/i);
   });
 });
