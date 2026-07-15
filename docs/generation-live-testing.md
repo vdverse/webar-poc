@@ -7,7 +7,7 @@
 | Migration 0015 | Applied remotely |
 | Edge Functions | Deployed (Meshy adapter + ingestion) |
 | `IMAGE_TO_3D_PROVIDER=meshy` | Set |
-| `IMAGE_TO_3D_API_KEY` | **Not set in Supabase — live Meshy blocked** |
+| `IMAGE_TO_3D_API_KEY` | Configured in Supabase secrets (2026-07-16) |
 | Test project prepared | `593fea53-623b-44f5-ab25-701501c3d008` (single JPEG, 36 KB) |
 | Dry-run create job | Failed `provider-not-configured`; credits unchanged (3) |
 | Real Meshy GLB | **Pending API key + one live run** |

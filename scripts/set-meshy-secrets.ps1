@@ -1,42 +1,69 @@
 # Sets Supabase secrets for Meshy without printing the key value.
 # Reads IMAGE_TO_3D_API_KEY from .env.meshy.local (gitignored).
+# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/set-meshy-secrets.ps1
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
-$keyFile = Join-Path $root '.env.meshy.local'
 
-if (-not (Test-Path $keyFile)) {
-  Write-Error "Missing $keyFile — copy .env.meshy.local.example and add IMAGE_TO_3D_API_KEY."
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$keyFile = Join-Path $repoRoot '.env.meshy.local'
+
+if (-not (Test-Path -LiteralPath $keyFile)) {
+    throw '.env.meshy.local was not found. Copy .env.meshy.local.example and add IMAGE_TO_3D_API_KEY.'
 }
 
-$raw = Get-Content $keyFile -Raw
-$match = [regex]::Match($raw, '(?m)^IMAGE_TO_3D_API_KEY\s*=\s*(.+)$')
-if (-not $match.Success) {
-  Write-Error 'IMAGE_TO_3D_API_KEY not found in .env.meshy.local'
+$activeLine = Get-Content -LiteralPath $keyFile |
+    Where-Object { $_ -match '^\s*IMAGE_TO_3D_API_KEY\s*=' } |
+    Select-Object -First 1
+
+if (-not $activeLine) {
+    $commented = Get-Content -LiteralPath $keyFile |
+        Where-Object { $_ -match '^\s*#\s*IMAGE_TO_3D_API_KEY\s*=' } |
+        Select-Object -First 1
+    if ($commented) {
+        throw 'IMAGE_TO_3D_API_KEY is commented out in .env.meshy.local. Uncomment that line (remove the leading #) so it is an active assignment.'
+    }
+    throw 'IMAGE_TO_3D_API_KEY is missing from .env.meshy.local.'
 }
 
-$key = $match.Groups[1].Value.Trim().Trim('"').Trim("'")
+$key = ($activeLine -split '=', 2)[1].Trim().Trim('"').Trim("'")
+
+if ([string]::IsNullOrWhiteSpace($key)) {
+    throw 'IMAGE_TO_3D_API_KEY is blank.'
+}
+
+if ($key -eq 'msy_****' -or $key -match 'YOUR_|CHANGEME|placeholder|\*{2,}') {
+    throw 'IMAGE_TO_3D_API_KEY is still a placeholder. Put the real Meshy key in .env.meshy.local.'
+}
+
 if ($key.Length -lt 10) {
-  Write-Error 'IMAGE_TO_3D_API_KEY looks empty or too short.'
+    throw 'IMAGE_TO_3D_API_KEY looks too short.'
 }
 
-Write-Host "Setting IMAGE_TO_3D_PROVIDER=meshy and IMAGE_TO_3D_API_KEY (length=$($key.Length), value hidden)…"
+Write-Host ("Uploading Meshy secrets. Key length: {0}. Value will not be printed." -f $key.Length)
 
-# Pipe env-style input to supabase secrets set (avoids echoing in process list as much as possible)
-$envFile = Join-Path $env:TEMP "meshy-secrets-$([guid]::NewGuid()).env"
+$envFile = Join-Path $env:TEMP ("meshy-secrets-{0}.env" -f [guid]::NewGuid().ToString('N'))
+
 try {
-  @(
-    'IMAGE_TO_3D_PROVIDER=meshy'
-    "IMAGE_TO_3D_API_KEY=$key"
-    'IMAGE_TO_3D_ALLOW_MOCK=false'
-  ) | Set-Content -Path $envFile -Encoding ascii
+    @(
+        'IMAGE_TO_3D_PROVIDER=meshy'
+        ('IMAGE_TO_3D_API_KEY={0}' -f $key)
+        'IMAGE_TO_3D_ALLOW_MOCK=false'
+    ) | Set-Content -LiteralPath $envFile -Encoding ascii
 
-  supabase secrets set --env-file $envFile --project-ref codqgrxradxaloruoyys
-  if ($LASTEXITCODE -ne 0) { Write-Error 'supabase secrets set failed' }
+    supabase secrets set --env-file $envFile --project-ref codqgrxradxaloruoyys
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Supabase secret upload failed.'
+    }
 
-  Write-Host 'Secrets set. Verifying names only:'
-  supabase secrets list --project-ref codqgrxradxaloruoyys
+    Write-Host 'Supabase secrets set: IMAGE_TO_3D_PROVIDER, IMAGE_TO_3D_API_KEY, IMAGE_TO_3D_ALLOW_MOCK'
+    Write-Host 'Verifying secret names only:'
+    supabase secrets list --project-ref codqgrxradxaloruoyys
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Supabase secrets list failed.'
+    }
 }
 finally {
-  if (Test-Path $envFile) { Remove-Item -Force $envFile }
+    if (Test-Path -LiteralPath $envFile) {
+        Remove-Item -LiteralPath $envFile -Force
+    }
 }

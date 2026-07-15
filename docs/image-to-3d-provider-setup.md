@@ -8,7 +8,7 @@ Supabase project: `codqgrxradxaloruoyys`
 |--------|---------------------|
 | `IMAGE_TO_3D_PROVIDER=meshy` | Configured |
 | `IMAGE_TO_3D_ALLOW_MOCK=false` | Configured |
-| `IMAGE_TO_3D_API_KEY` | **Required — not yet in Supabase secrets** |
+| `IMAGE_TO_3D_API_KEY` | Configured (value never in repo) |
 | `IMAGE_TO_3D_WEBHOOK_SECRET` | Optional (polling used in v1) |
 
 ### Set the Meshy key (you)

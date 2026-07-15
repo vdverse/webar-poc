@@ -4,7 +4,7 @@
 (`Improve markerless AR surface placement and physical scale.`)  
 Branch: `feature/batch-2-project-wizard` (already on origin).
 
-**Batch 3B (in progress):** Meshy adapter aligned to official API; migration 0015 applied; Edge Functions deployed. **Blocked on `IMAGE_TO_3D_API_KEY` in Supabase secrets** for live image→GLB→studio→AR.
+**Batch 3B (in progress):** Meshy adapter aligned to official API; migration 0015 applied; Edge Functions deployed; Supabase secret names `IMAGE_TO_3D_PROVIDER` / `IMAGE_TO_3D_API_KEY` / `IMAGE_TO_3D_ALLOW_MOCK` configured. Next: one live Meshy generation + studio → publish → Android AR confirmation.
 
 **Dirty working-tree resolution (2026-07-16):** Uncommitted changes were an
 unexplained full *reverse* of `8f8175c` (~923 lines deleted). They did **not**
