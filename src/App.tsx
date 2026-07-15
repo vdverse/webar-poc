@@ -22,6 +22,7 @@ const ProjectsPage = lazy(() => import('./pages/dashboard/ProjectsPage'));
 const NewProjectPage = lazy(() => import('./pages/dashboard/NewProjectPage'));
 const ProjectWizardPage = lazy(() => import('./pages/dashboard/ProjectWizardPage'));
 const ProjectStudioPage = lazy(() => import('./pages/dashboard/ProjectStudioPage'));
+const GenerationJobPage = lazy(() => import('./pages/dashboard/GenerationJobPage'));
 const SettingsPage = lazy(() => import('./pages/dashboard/SettingsPage'));
 const NotAvailableYetPage = lazy(() => import('./pages/dashboard/NotAvailableYetPage'));
 const PublicViewerPage = lazy(() => import('./pages/PublicViewerPage'));
@@ -69,13 +70,14 @@ export default function App() {
                   element={<ProjectWizardPage forceStage="capture" />}
                 />
                 <Route path="projects/:projectId/studio" element={<ProjectStudioPage />} />
+                <Route path="projects/:projectId/generate" element={<GenerationJobPage />} />
                 <Route
                   path="generation-jobs"
                   element={
                     <NotAvailableYetPage
                       title="Generation Jobs"
                       batch="Batch 3"
-                      description="Track image-to-3D generation jobs and their progress here."
+                      description="Open a photo project and use Generate, or go to Projects → Generate on a saved single-image / multi-view project."
                     />
                   }
                 />

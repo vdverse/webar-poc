@@ -19,6 +19,7 @@ import {
   SINGLE_IMAGE_MAX_BYTES,
 } from '../../features/uploads/imageValidation';
 import { useSourceImagesQuery } from '../../features/uploads/sourceImageHooks';
+import { GenerationPanel } from '../../features/generation/components/GenerationPanel';
 
 /**
  * Steps 2–5 of the creation wizard. The database is the source of truth for
@@ -358,14 +359,23 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
                   privately — they are never shown to viewers.
                 </p>
                 <p>
-                  Next comes image-to-3D generation, which arrives in Batch 3. Your
-                  project will be right here waiting. If you already have a GLB,
-                  switch source method or open studio after choosing “Upload an existing GLB”.
+                  Generate a textured GLB on the server (provider key required), then open
+                  the same GLB studio used for direct uploads. Direct GLB upload remains
+                  available anytime.
                 </p>
+                {projectId && (
+                  <GenerationPanel
+                    projectId={projectId}
+                    projectName={p.name}
+                    sourceMethod={p.source_method}
+                    wizardStage={p.wizard_stage}
+                    imageCount={imageCount}
+                  />
+                )}
                 <div className="wizard-actions">
-                  <button className="dash-button" disabled title="Image-to-3D generation is not available yet">
-                    Generate 3D model — coming in Batch 3
-                  </button>
+                  <Link className="dash-button-secondary" to={`/dashboard/projects/${p.id}/generate`}>
+                    Open generation page
+                  </Link>
                   <button
                     className="dash-button-secondary"
                     onClick={() => goTo('capture')}

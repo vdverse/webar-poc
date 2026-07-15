@@ -3,8 +3,7 @@
  * boundary (that's the API edge); the wizard's own stage logic, guard
  * conditions and rendering run for real. Covers: resuming at the persisted
  * stage, source-method selection persisting via updateProject, the review
- * screen showing real metadata, and the saved screen offering no functional
- * generate action.
+ * screen showing real metadata, and the saved screen exposing Generate (Batch 3).
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -32,6 +31,14 @@ const baseProject: ArProject = {
 
 let currentProject: ArProject = baseProject;
 let currentImages: ProjectSourceImage[] = [];
+
+vi.mock('../../features/generation/components/GenerationPanel', () => ({
+  GenerationPanel: () => (
+    <button type="button" disabled={false}>
+      Generate 3D model
+    </button>
+  ),
+}));
 
 vi.mock('../../features/projects/api/projectHooks', () => ({
   useProjectQuery: () => ({
@@ -145,16 +152,16 @@ describe('ProjectWizardPage', () => {
     expect(screen.getByText('Single image')).toBeTruthy();
   });
 
-  it('offers a disabled, non-functional generate action on the saved step', () => {
+  it('offers generate actions on the saved step for photo projects', () => {
     currentProject = {
       ...baseProject,
       source_method: 'single_image',
       wizard_stage: 'saved',
     };
     renderWizard();
-    const generate = screen.getByRole('button', { name: /Generate 3D model/i }) as HTMLButtonElement;
-    expect(generate.disabled).toBe(true);
-    expect(screen.getByText(/generation, which arrives in Batch 3/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Generate 3D model/i })).toBeTruthy();
+    expect(screen.getByText(/Generate a textured GLB on the server/i)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open generation page/i })).toBeTruthy();
   });
 
   it('blocks the review step when no source method is set', () => {

@@ -165,7 +165,15 @@ The steps a human must perform, in order, and what they verify:
   track a printed target; without one it shows the "No camera available"
   error. The UI is designed for mobile portrait.
 
-## What is and is not automatically verified
+## SaaS app (Vercel + Supabase)
+
+Preview: https://webar-poc-one.vercel.app
+
+Working path: auth → project → **upload GLB** → studio → publish → QR → Android markerless AR.
+
+**Batch 3 (image-to-3D):** photo projects can call secure Edge Functions to generate a GLB, then reuse the same studio. Requires server secrets — see `docs/batch-3-image-to-3d-plan.md` and `docs/image-to-3d-provider-setup.md`. Direct GLB upload remains permanent.
+
+MindAR image-target proof stays at `/dev/ar-proof` (also on GitHub Pages).
 
 Verified in this environment (no camera, GPU, or real browser available):
 

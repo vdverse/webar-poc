@@ -1,0 +1,14 @@
+# Edge Functions for Batch 3 image-to-3D
+# Deploy: supabase functions deploy create-generation-job get-generation-status cancel-generation-job process-generation-result --project-ref codqgrxradxaloruoyys
+
+[functions.create-generation-job]
+verify_jwt = true
+
+[functions.get-generation-status]
+verify_jwt = true
+
+[functions.cancel-generation-job]
+verify_jwt = true
+
+[functions.process-generation-result]
+verify_jwt = false

@@ -17,7 +17,8 @@ export const SINGLE_IMAGE_MAX_BYTES = 15 * 1024 * 1024;
 export const MULTI_VIEW_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const MULTI_VIEW_MIN_IMAGES = 2;
 export const MULTI_VIEW_MAX_IMAGES = 12;
-export const RECOMMENDED_MIN_DIMENSION = 512;
+/** Recommended shortest side for usable reconstruction (warning, not hard reject). */
+export const RECOMMENDED_MIN_DIMENSION = 1024;
 
 export interface ImageIssue {
   level: 'error' | 'warning';
