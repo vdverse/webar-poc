@@ -4,6 +4,9 @@
 (`Improve markerless AR surface placement and physical scale.`)  
 Branch: `feature/batch-2-project-wizard` (already on origin).
 
+**Batch 3A commit:** `a0d7605`  
+(`feat: add Batch 3A image-to-3D architecture with mock provider`)
+
 **Dirty working-tree resolution (2026-07-16):** Uncommitted changes were an
 unexplained full *reverse* of `8f8175c` (~923 lines deleted). They did **not**
 represent the phone-tested AR placement behaviour. Preserved via:
