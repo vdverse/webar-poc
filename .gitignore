@@ -32,3 +32,4 @@ scripts/target.size
 # Supabase CLI link cache (may contain pooler credentials)
 supabase/.temp/
 .vercel
+.batch3b-publish-result.json

@@ -45,7 +45,15 @@ Deployed 2026-07-16 (Batch 3B Meshy adapter + data-URI delivery).
 
 `0015_generation_job_hardening.sql` applied remotely via `supabase db push`.
 
-## Live test scripts
+## Live generation (Batch 3B)
+
+One successful Meshy job was completed 2026-07-16:
+
+- Duration ~160 s · credits 3→2 · GLB ~20.4 MB
+- Published: https://webar-poc-one.vercel.app/view/batch-3b-meshy-test-593fea53
+- Do **not** re-run `scripts/live-meshy-generate.mjs` unless intentionally starting a new paid job.
+
+Ingest now records mesh/triangle/material/texture counts and bounds from the GLB JSON chunk so Studio AR scale has real metadata.
 
 | Script | Purpose |
 |--------|---------|

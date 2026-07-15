@@ -3,6 +3,7 @@ import {
   isAllowedResultUrl,
   MAX_RESULT_BYTES,
 } from './generationValidation.ts';
+import { inspectGlbJsonChunk } from './glbJsonInspect.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const MODEL_BUCKET = 'generated-models-private';
@@ -82,6 +83,13 @@ export async function ingestCompletedModel(input: {
     .update({ stage: 'Validating GLB', progress: 95 })
     .eq('id', input.job.id);
 
+  let inspection;
+  try {
+    inspection = inspectGlbJsonChunk(bytes);
+  } catch (e) {
+    throw new Error(`GLB inspect failed: ${e instanceof Error ? e.message : 'unknown'}`);
+  }
+
   const modelId = crypto.randomUUID();
   const path = `${input.job.owner_id}/${input.job.project_id}/${modelId}.glb`;
 
@@ -102,14 +110,19 @@ export async function ingestCompletedModel(input: {
       owner_id: input.job.owner_id,
       glb_storage_path: path,
       file_size_bytes: bytes.byteLength,
+      mesh_count: inspection.meshCount,
+      triangle_count: inspection.triangleCount,
+      material_count: inspection.materialCount,
+      texture_count: inspection.textureCount,
+      animation_names: inspection.animationNames,
+      bounds: inspection.bounds,
       metadata: {
         source: 'image_to_3d',
         provider_metadata: input.providerMetadata,
         ingested_at: new Date().toISOString(),
+        warnings: inspection.warnings,
       },
       processing_status: 'ready',
-      bounds: {},
-      animation_names: [],
     })
     .select('*')
     .single();
@@ -130,6 +143,8 @@ export async function ingestCompletedModel(input: {
         model_id: modelId,
         glb_storage_path: path,
         file_size_bytes: bytes.byteLength,
+        mesh_count: inspection.meshCount,
+        triangle_count: inspection.triangleCount,
       },
     })
     .eq('id', input.job.id)

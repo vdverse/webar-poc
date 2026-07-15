@@ -4,7 +4,8 @@
 (`Improve markerless AR surface placement and physical scale.`)  
 Branch: `feature/batch-2-project-wizard` (already on origin).
 
-**Batch 3B (in progress):** Meshy adapter aligned to official API; migration 0015 applied; Edge Functions deployed; Supabase secret names `IMAGE_TO_3D_PROVIDER` / `IMAGE_TO_3D_API_KEY` / `IMAGE_TO_3D_ALLOW_MOCK` configured. Next: one live Meshy generation + studio → publish → Android AR confirmation.
+**Batch 3B:** Real Meshy generation completed 2026-07-16 (job `67452677-…`, model `f4c1c560-…`, ~20.4 MB GLB). Published at https://webar-poc-one.vercel.app/view/batch-3b-meshy-test-593fea53. **Android AR still Not tested** until phone confirmation. Direct GLB path unchanged.
+
 
 **Dirty working-tree resolution (2026-07-16):** Uncommitted changes were an
 unexplained full *reverse* of `8f8175c` (~923 lines deleted). They did **not**
