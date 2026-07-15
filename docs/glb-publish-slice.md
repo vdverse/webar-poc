@@ -28,6 +28,11 @@ and the Android phone checklist.
 - `0013_creator_publish_write_policies.sql` — temporary owner write policies for
   `generated_models`, `publications`, and the two storage buckets, until Edge
   Functions own those writes. Applied to `codqgrxradxaloruoyys`.
+- `0014_fix_published_assets_path_rls.sql` — fixes publish upload RLS. 0013’s
+  unqualified `name` inside the `ar_projects` EXISTS subquery resolved to the
+  project **title** (`p.name`), not the storage object path, so public GLB
+  uploads always failed with “new row violates row-level security policy”.
+  0014 fully qualifies `storage.objects.name`. Applied to `codqgrxradxaloruoyys`.
 
 ## Manual acceptance
 

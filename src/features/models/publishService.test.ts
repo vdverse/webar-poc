@@ -1,11 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
   assertCanPublish,
+  assertPublishOwnership,
   buildPublicViewerUrl,
   makePublicSlug,
 } from './publishService';
 import { ProjectServiceError } from '../projects/api/projectService';
+import { publishedAssetPath } from '../../lib/storagePaths';
 import type { ArProject } from '../projects/types';
 import type { GeneratedModel, SceneSettings } from './types';
 
@@ -93,5 +97,55 @@ describe('publish helpers', () => {
 
   it('accepts a ready project + model + settings', () => {
     expect(() => assertCanPublish({ project, model, settings })).not.toThrow();
+  });
+
+  it('rejects publishing another user’s project', () => {
+    expect(() =>
+      assertPublishOwnership({
+        userId: 'other-user',
+        project,
+        model,
+        settings,
+      }),
+    ).toThrow(/only publish your own/i);
+  });
+
+  it('rejects a model owned by someone else', () => {
+    expect(() =>
+      assertPublishOwnership({
+        userId: 'u1',
+        project,
+        model: { ...model, owner_id: 'other' },
+        settings,
+      }),
+    ).toThrow(/model does not belong/i);
+  });
+
+  it('accepts matching owner ids across project, model and settings', () => {
+    expect(() =>
+      assertPublishOwnership({ userId: 'u1', project, model, settings }),
+    ).not.toThrow();
+  });
+
+  it('builds public asset paths as {projectId}/{version}/model.glb', () => {
+    const path = publishedAssetPath({
+      projectId: project.id,
+      publicationVersion: 1,
+      file: 'model.glb',
+    });
+    expect(path).toBe(`${project.id}/1/model.glb`);
+    expect(path.split('/')[0]).toBe(project.id);
+  });
+});
+
+describe('published-assets RLS migration', () => {
+  it('qualifies storage.objects.name so project title cannot shadow the path', () => {
+    const sql = readFileSync(
+      join(process.cwd(), 'supabase/migrations/0014_fix_published_assets_path_rls.sql'),
+      'utf8',
+    );
+    expect(sql).toMatch(/storage\.foldername\(storage\.objects\.name\)/);
+    expect(sql).not.toMatch(/storage\.foldername\(p\.name\)/);
+    expect(sql).not.toMatch(/storage\.foldername\(name\)/);
   });
 });

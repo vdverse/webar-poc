@@ -24,6 +24,13 @@ async function requireUserId(): Promise<string> {
   return data.user.id;
 }
 
+/** Dev-only stage logging — never put tokens or signed URLs in user-facing errors. */
+function stage(label: string, detail?: string) {
+  if (import.meta.env.DEV) {
+    console.info(`[publish] ${label}${detail ? `: ${detail}` : ''}`);
+  }
+}
+
 function requestFailed(context: string, detail?: string): ProjectServiceError {
   if (import.meta.env.DEV && detail) {
     console.error(`[publish] ${context}:`, detail);
@@ -63,6 +70,24 @@ export function assertCanPublish(input: {
   }
   if (!(input.settings.scale > 0)) {
     throw new ProjectServiceError('request-failed', 'Scale must be greater than zero.');
+  }
+}
+
+/** Ensures the signed-in user owns every row involved in publish. */
+export function assertPublishOwnership(input: {
+  userId: string;
+  project: ArProject;
+  model: GeneratedModel;
+  settings: SceneSettings;
+}): void {
+  if (input.project.owner_id !== input.userId) {
+    throw new ProjectServiceError('request-failed', 'You can only publish your own projects.');
+  }
+  if (input.model.owner_id !== input.userId || input.model.project_id !== input.project.id) {
+    throw new ProjectServiceError('request-failed', 'The model does not belong to this project.');
+  }
+  if (input.settings.owner_id !== input.userId || input.settings.project_id !== input.project.id) {
+    throw new ProjectServiceError('request-failed', 'Scene settings do not belong to this project.');
   }
 }
 
@@ -107,7 +132,6 @@ function buildSnapshot(input: {
       physicalHeight: typeof cfg.physicalHeight === 'number' ? cfg.physicalHeight : null,
       physicalDepth: typeof cfg.physicalDepth === 'number' ? cfg.physicalDepth : null,
     },
-    // iPhone Quick Look only when a USDZ URL is present; otherwise webxr + scene-viewer.
     arModes: input.usdzPublicUrl ? 'webxr scene-viewer quick-look' : 'webxr scene-viewer',
     publishedAt: new Date().toISOString(),
   };
@@ -143,6 +167,11 @@ export async function getActivePublicationBySlug(publicSlug: string): Promise<Pu
  * Publish: copy GLB to the public bucket, deactivate prior versions, insert
  * an immutable snapshot. QR codes must encode buildPublicViewerUrl(slug) —
  * never a private signed URL.
+ *
+ * Order: validate → upload public GLB → snapshot → deactivate prior → insert
+ * publication → mark project published. Project is never marked published if
+ * the public upload or publication insert fails. Best-effort cleanup removes
+ * an orphaned public object if the DB insert fails after upload.
  */
 export async function publishProject(input: {
   project: ArProject;
@@ -152,8 +181,19 @@ export async function publishProject(input: {
   assertCanPublish(input);
 
   const client = requireClient();
+  stage('1 load session');
   const userId = await requireUserId();
+  stage('1 session ok', `uid_prefix=${userId.slice(0, 8)}`);
 
+  stage('2 ownership check');
+  assertPublishOwnership({
+    userId,
+    project: input.project,
+    model: input.model,
+    settings: input.settings,
+  });
+
+  stage('3 load publication history');
   const { data: priorRows, error: priorError } = await client
     .from('publications')
     .select('version')
@@ -172,7 +212,9 @@ export async function publishProject(input: {
     publicationVersion: nextVersion,
     file: 'model.glb',
   });
+  stage('4 public path ready', `v${nextVersion} segments=${glbPublicPath.split('/').length}`);
 
+  stage('5 download private GLB');
   const { data: blob, error: downloadError } = await client.storage
     .from(PRIVATE_BUCKET)
     .download(input.model.glb_storage_path);
@@ -180,11 +222,14 @@ export async function publishProject(input: {
     throw requestFailed('Reading the private GLB failed', downloadError?.message);
   }
 
+  stage('6 upload public GLB');
   const { error: uploadError } = await client.storage.from(PUBLIC_BUCKET).upload(glbPublicPath, blob, {
     contentType: 'model/gltf-binary',
     upsert: true,
   });
-  if (uploadError) throw requestFailed('Publishing the GLB failed', uploadError.message);
+  if (uploadError) {
+    throw requestFailed('Publishing the GLB failed', uploadError.message);
+  }
 
   let usdzPublicUrl: string | null = null;
   if (input.model.usdz_storage_path) {
@@ -206,6 +251,7 @@ export async function publishProject(input: {
   }
 
   const glbPublicUrl = publicObjectUrl(glbPublicPath);
+  stage('7 build snapshot');
   const snapshot = buildSnapshot({
     project: input.project,
     settings: input.settings,
@@ -214,14 +260,18 @@ export async function publishProject(input: {
     usdzPublicUrl,
   });
 
-  // Deactivate previous active row(s) then insert the new version.
+  stage('8 deactivate prior publications');
   const { error: deactivateError } = await client
     .from('publications')
     .update({ is_active: false })
     .eq('project_id', input.project.id)
     .eq('is_active', true);
-  if (deactivateError) throw requestFailed('Updating prior publications failed', deactivateError.message);
+  if (deactivateError) {
+    await client.storage.from(PUBLIC_BUCKET).remove([glbPublicPath]);
+    throw requestFailed('Updating prior publications failed', deactivateError.message);
+  }
 
+  stage('9 insert publication row');
   const { data: publication, error: insertError } = await client
     .from('publications')
     .insert({
@@ -236,14 +286,23 @@ export async function publishProject(input: {
     .single();
 
   if (insertError || !publication) {
+    await client.storage.from(PUBLIC_BUCKET).remove([glbPublicPath]);
     throw requestFailed('Creating the publication failed', insertError?.message);
   }
 
-  await client
+  stage('10 update project published status');
+  const { error: projectUpdateError } = await client
     .from('ar_projects')
     .update({ status: 'published', published_at: new Date().toISOString() })
-    .eq('id', input.project.id);
+    .eq('id', input.project.id)
+    .eq('owner_id', userId);
+  if (projectUpdateError) {
+    // Publication row already exists; surface the error but do not delete the
+    // public asset — the viewer can still serve the active snapshot.
+    throw requestFailed('Updating the project status failed', projectUpdateError.message);
+  }
 
   const viewerUrl = buildPublicViewerUrl(publicSlug);
+  stage('11 QR/viewer URL ready', `slug=${publicSlug}`);
   return { publication: publication as Publication, viewerUrl };
 }

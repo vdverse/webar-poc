@@ -1,12 +1,11 @@
 # Supabase migration inventory
 
-**Execution status:** migrations `0001`–`0013` have been applied to Supabase
-project ref `codqgrxradxaloruoyys` (2026-07-14 / 2026-07-15). Schema, RLS and
-buckets for Batch 1–2 were verified after `db push`. Migration `0013` adds
-temporary owner write policies for direct-GLB upload and browser publish until
-Edge Functions exist. Do not silently re-edit applied files — add forward
-migrations only.
-
+**Execution status:** migrations `0001`–`0014` have been applied to Supabase
+project ref `codqgrxradxaloruoyys` (through 2026-07-15). Schema, RLS and buckets
+for Batch 1–2 were verified after `db push`. Migration `0013` adds temporary
+owner write policies for direct-GLB upload and browser publish; `0014` fixes
+published-ar-assets path RLS (`storage.objects.name` qualification). Do not
+silently re-edit applied files — add forward migrations only.
 Migrations are forward-only and must run in numerical order; later files
 reference objects created by earlier ones (dependencies listed per row).
 
@@ -33,10 +32,11 @@ adds two check constraints. It is safe to apply on a fresh project after
 | 0011 | `0011_grants.sql` | — | — | — | — (GRANT statements; RLS policies are unreachable without them) | all above through 0010 |
 | 0012 | `0012_project_wizard_columns.sql` | — (alters `ar_projects`) | — | — | — | 0003 |
 | 0013 | `0013_creator_publish_write_policies.sql` | — | owner insert/update on `generated_models` + `publications`; storage write policies for `generated-models-private` and `published-ar-assets` | Temporary creator write path for the GLB publish slice (Edge Functions later) | 0006, 0008, 0010, 0011 |
+| 0014 | `0014_fix_published_assets_path_rls.sql` | — | recreate published-ar-assets owner write policies using `storage.objects.name` | Fixes 0013 name shadowing (`ar_projects.name` vs object path) | 0013 |
 
-> **Execution order is strictly numeric: 0001 → 0013.** 0012 only alters
-> `ar_projects`. 0013 is required for the browser-side GLB publish slice and
-> is safe only after 0010–0011.
+> **Execution order is strictly numeric: 0001 → 0014.** 0012 only alters
+> `ar_projects`. 0013 unlocks browser publish; 0014 fixes the published-assets
+> path RLS bug that blocked public GLB upload.
 
 ## Setup path A — Supabase CLI (run on your machine, not in this sandbox)
 
