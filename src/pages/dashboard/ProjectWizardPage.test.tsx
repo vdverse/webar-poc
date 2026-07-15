@@ -1,9 +1,6 @@
 /**
  * Wizard behaviour tests. The data hooks are mocked at their module
- * boundary (that's the API edge); the wizard's own stage logic, guard
- * conditions and rendering run for real. Covers: resuming at the persisted
- * stage, source-method selection persisting via updateProject, the review
- * screen showing real metadata, and the saved screen exposing Generate (Batch 3).
+ * boundary; the wizard's own stage logic and saved-step CTAs run for real.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -31,14 +28,8 @@ const baseProject: ArProject = {
 
 let currentProject: ArProject = baseProject;
 let currentImages: ProjectSourceImage[] = [];
-
-vi.mock('../../features/generation/components/GenerationPanel', () => ({
-  GenerationPanel: () => (
-    <button type="button" disabled={false}>
-      Generate 3D model
-    </button>
-  ),
-}));
+let latestModel: { id: string } | null = null;
+let latestJob: { status: string } | null = null;
 
 vi.mock('../../features/projects/api/projectHooks', () => ({
   useProjectQuery: () => ({
@@ -55,7 +46,6 @@ vi.mock('../../features/projects/api/projectHooks', () => ({
 
 vi.mock('../../features/uploads/sourceImageHooks', () => ({
   useSourceImagesQuery: () => ({ data: currentImages, isPending: false, isError: false }),
-  // ImageUploader also pulls these in; give them inert stubs.
   useUploadSourceImageMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useDeleteSourceImageMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useReorderSourceImagesMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -63,16 +53,25 @@ vi.mock('../../features/uploads/sourceImageHooks', () => ({
 }));
 
 vi.mock('../../features/models/modelHooks', () => ({
-  useLatestModelQuery: () => ({ data: null, isPending: false, isError: false, refetch: vi.fn() }),
+  useLatestModelQuery: () => ({
+    data: latestModel,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+}));
+
+vi.mock('../../features/generation/api/generationHooks', () => ({
+  useLatestGenerationJobQuery: () => ({ data: latestJob, isPending: false }),
+  useCreateGenerationMutation: () => ({ mutate: vi.fn(), isPending: false, isError: false, error: null }),
+  useCancelGenerationMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useGenerationStatusPolling: () => undefined,
 }));
 
 vi.mock('../../features/models/components/GlbUploader', () => ({
   GlbUploader: () => <div data-testid="glb-uploader">GLB uploader</div>,
 }));
 
-// SignedThumb renders a real <img>; jsdom's canvas shim can't construct it,
-// and it isn't the subject of these tests (its signed-URL behaviour is
-// covered via the useSignedPreviewQuery hook). Stub it to a plain element.
 vi.mock('../../features/uploads/components/SignedThumb', () => ({
   SignedThumb: ({ alt }: { alt: string }) => <div data-testid="thumb" aria-label={alt} />,
 }));
@@ -84,6 +83,8 @@ function renderWizard() {
     <MemoryRouter initialEntries={['/dashboard/projects/p1']}>
       <Routes>
         <Route path="/dashboard/projects/:projectId" element={<ProjectWizardPage />} />
+        <Route path="/dashboard/projects/:projectId/generate" element={<div>Generate page</div>} />
+        <Route path="/dashboard/projects/:projectId/studio" element={<div>Studio page</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -94,6 +95,8 @@ afterEach(() => {
   mutateUpdate.mockClear();
   currentProject = baseProject;
   currentImages = [];
+  latestModel = null;
+  latestJob = null;
 });
 
 describe('ProjectWizardPage', () => {
@@ -152,16 +155,118 @@ describe('ProjectWizardPage', () => {
     expect(screen.getByText('Single image')).toBeTruthy();
   });
 
-  it('offers generate actions on the saved step for photo projects', () => {
+  it('shows an enabled Generate link to the generation page for saved single-image projects', () => {
+    currentProject = {
+      ...baseProject,
+      source_method: 'single_image',
+      wizard_stage: 'saved',
+      status: 'draft',
+    };
+    currentImages = [
+      {
+        id: 'img1',
+        project_id: 'p1',
+        owner_id: 'u1',
+        storage_path: 'u1/p1/img1.jpg',
+        original_filename: 'a.jpg',
+        mime_type: 'image/jpeg',
+        file_size_bytes: 10,
+        width: 1200,
+        height: 900,
+        angle_label: null,
+        sort_order: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    renderWizard();
+    const link = screen.getByRole('link', { name: /^Generate 3D model$/i });
+    expect((link as HTMLAnchorElement).getAttribute('href')).toBe('/dashboard/projects/p1/generate');
+    expect(screen.getByText(/photos are ready/i)).toBeTruthy();
+    expect(screen.queryByText(/coming in Batch 3/i)).toBeNull();
+  });
+
+  it('shows Open GLB Studio when the photo project already has a model', () => {
+    currentProject = {
+      ...baseProject,
+      source_method: 'single_image',
+      wizard_stage: 'saved',
+      status: 'published',
+    };
+    currentImages = [
+      {
+        id: 'img1',
+        project_id: 'p1',
+        owner_id: 'u1',
+        storage_path: 'u1/p1/img1.jpg',
+        original_filename: 'a.jpg',
+        mime_type: 'image/jpeg',
+        file_size_bytes: 10,
+        width: 1200,
+        height: 900,
+        angle_label: null,
+        sort_order: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    latestModel = { id: 'm1' };
+    latestJob = { status: 'completed' };
+    renderWizard();
+    const link = screen.getByRole('link', { name: /Open GLB Studio/i });
+    expect((link as HTMLAnchorElement).getAttribute('href')).toBe('/dashboard/projects/p1/studio');
+  });
+
+  it('shows View generation progress while a job is active', () => {
+    currentProject = {
+      ...baseProject,
+      source_method: 'single_image',
+      wizard_stage: 'saved',
+      status: 'generating',
+    };
+    currentImages = [
+      {
+        id: 'img1',
+        project_id: 'p1',
+        owner_id: 'u1',
+        storage_path: 'u1/p1/img1.jpg',
+        original_filename: 'a.jpg',
+        mime_type: 'image/jpeg',
+        file_size_bytes: 10,
+        width: 1200,
+        height: 900,
+        angle_label: null,
+        sort_order: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    latestJob = { status: 'processing' };
+    renderWizard();
+    expect(screen.getByRole('link', { name: /View generation progress/i })).toBeTruthy();
+  });
+
+  it('disables Generate with a clear reason when images are missing', () => {
     currentProject = {
       ...baseProject,
       source_method: 'single_image',
       wizard_stage: 'saved',
     };
+    currentImages = [];
     renderWizard();
-    expect(screen.getByRole('button', { name: /Generate 3D model/i })).toBeTruthy();
-    expect(screen.getByText(/Generate a textured GLB on the server/i)).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Open generation page/i })).toBeTruthy();
+    const btn = screen.getByRole('button', { name: /Generate 3D model/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(screen.getByText(/exactly one/i)).toBeTruthy();
+  });
+
+  it('offers Open GLB studio for direct GLB projects', () => {
+    currentProject = {
+      ...baseProject,
+      source_method: 'glb_upload',
+      wizard_stage: 'saved',
+      status: 'generated',
+    };
+    latestModel = { id: 'm1' };
+    renderWizard();
+    expect(screen.getByRole('link', { name: /Open GLB studio/i })).toBeTruthy();
+    expect(screen.queryByText(/coming in Batch 3/i)).toBeNull();
   });
 
   it('blocks the review step when no source method is set', () => {

@@ -19,7 +19,7 @@ import {
   SINGLE_IMAGE_MAX_BYTES,
 } from '../../features/uploads/imageValidation';
 import { useSourceImagesQuery } from '../../features/uploads/sourceImageHooks';
-import { GenerationPanel } from '../../features/generation/components/GenerationPanel';
+import { WizardGenerationCta } from '../../features/generation/components/WizardGenerationCta';
 
 /**
  * Steps 2–5 of the creation wizard. The database is the source of truth for
@@ -358,24 +358,16 @@ export default function ProjectWizardPage({ forceStage }: { forceStage?: WizardS
                   {imageCount === 1 ? 'image' : 'images'}. Your photos are stored
                   privately — they are never shown to viewers.
                 </p>
-                <p>
-                  Generate a textured GLB on the server (provider key required), then open
-                  the same GLB studio used for direct uploads. Direct GLB upload remains
-                  available anytime.
-                </p>
                 {projectId && (
-                  <GenerationPanel
+                  <WizardGenerationCta
                     projectId={projectId}
-                    projectName={p.name}
+                    projectStatus={p.status}
                     sourceMethod={p.source_method}
                     wizardStage={p.wizard_stage}
                     imageCount={imageCount}
                   />
                 )}
                 <div className="wizard-actions">
-                  <Link className="dash-button-secondary" to={`/dashboard/projects/${p.id}/generate`}>
-                    Open generation page
-                  </Link>
                   <button
                     className="dash-button-secondary"
                     onClick={() => goTo('capture')}

@@ -140,3 +140,105 @@ export function nextActionForError(code: string | null | undefined): string {
       return 'Retry generation, or use Upload an existing GLB as a fallback.';
   }
 }
+
+export type WizardPrimaryActionKind =
+  | 'generate'
+  | 'view-progress'
+  | 'open-studio'
+  | 'retry'
+  | 'blocked';
+
+export interface WizardPrimaryAction {
+  kind: WizardPrimaryActionKind;
+  /** Accessible / button label */
+  label: string;
+  /** When set, render as a Link; when null, render disabled. */
+  to: string | null;
+  supportingCopy: string;
+  /** Shown when kind is blocked */
+  blockedReason?: string;
+}
+
+/**
+ * Primary CTA on the wizard “saved” step for photo projects.
+ * Navigates to /generate or /studio — never starts a paid Meshy job itself.
+ */
+export function resolveWizardPrimaryAction(input: {
+  projectId: string;
+  projectStatus: string | null | undefined;
+  sourceMethod: SourceMethod | null;
+  wizardStage: string | null;
+  imageCount: number;
+  imagesUploading?: boolean;
+  jobStatus: GenerationJobStatus | null | undefined;
+  hasGeneratedModel: boolean;
+}): WizardPrimaryAction {
+  const generatePath = `/dashboard/projects/${input.projectId}/generate`;
+  const studioPath = `/dashboard/projects/${input.projectId}/studio`;
+
+  const jobActive =
+    input.jobStatus != null && isActiveGenerationStatus(input.jobStatus);
+  const projectGenerating = input.projectStatus === 'generating';
+  if (jobActive || projectGenerating) {
+    return {
+      kind: 'view-progress',
+      label: 'View generation progress',
+      to: generatePath,
+      supportingCopy: 'Generation is in progress. Status continues on the generation page.',
+    };
+  }
+
+  if (input.jobStatus === 'failed') {
+    return {
+      kind: 'retry',
+      label: 'Retry generation',
+      to: generatePath,
+      supportingCopy: 'The last generation failed. Open the generation page to retry with the same photos.',
+    };
+  }
+
+  const readyInStudio =
+    input.hasGeneratedModel ||
+    input.jobStatus === 'completed' ||
+    input.projectStatus === 'generated' ||
+    input.projectStatus === 'published' ||
+    input.projectStatus === 'editing';
+
+  if (readyInStudio) {
+    return {
+      kind: 'open-studio',
+      label: 'Open GLB Studio',
+      to: studioPath,
+      supportingCopy:
+        'Your 3D model is ready. Open the Studio to preview, adjust and publish it.',
+    };
+  }
+
+  const gate = evaluateGenerateGate({
+    sourceMethod: input.sourceMethod,
+    wizardStage: input.wizardStage,
+    imageCount: input.imageCount,
+    imagesUploading: Boolean(input.imagesUploading),
+    activeJob: null,
+    providerConfigured: null,
+  });
+
+  if (!gate.canGenerate) {
+    return {
+      kind: 'blocked',
+      label: 'Generate 3D model',
+      to: null,
+      supportingCopy:
+        'Your photos stay private. When requirements are met, continue to generation.',
+      blockedReason: gate.message,
+    };
+  }
+
+  return {
+    kind: 'generate',
+    label: 'Generate 3D model',
+    to: generatePath,
+    supportingCopy:
+      'Your photos are ready. Generate a 3D model, then open the Studio to adjust and publish it.',
+  };
+}

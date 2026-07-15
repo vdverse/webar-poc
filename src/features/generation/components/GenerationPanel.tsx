@@ -75,33 +75,40 @@ export function GenerationPanel({
       )}
 
       <div className="wizard-actions">
-        <button
-          type="button"
-          className="dash-button"
-          disabled={!canClick}
-          title={!canClick ? gate.message : 'Start image-to-3D generation'}
-          onClick={() => create.mutate()}
-        >
-          {submitting ? 'Starting…' : 'Generate 3D model'}
-        </button>
-        {active && job && (
+        {!active && job?.status !== 'failed' && (
           <button
             type="button"
-            className="dash-button-secondary"
-            disabled={cancel.isPending}
-            onClick={() => cancel.mutate(job.id)}
+            className="dash-button"
+            disabled={!canClick}
+            title={!canClick ? gate.message : 'Start image-to-3D generation'}
+            onClick={() => create.mutate()}
           >
-            Cancel
+            {submitting ? 'Starting…' : 'Generate 3D model'}
           </button>
+        )}
+        {active && job && (
+          <>
+            <button type="button" className="dash-button" disabled>
+              View generation progress
+            </button>
+            <button
+              type="button"
+              className="dash-button-secondary"
+              disabled={cancel.isPending}
+              onClick={() => cancel.mutate(job.id)}
+            >
+              Cancel
+            </button>
+          </>
         )}
         {job?.status === 'failed' && (
           <button
             type="button"
-            className="dash-button-secondary"
+            className="dash-button"
             disabled={submitting}
             onClick={() => create.mutate()}
           >
-            Retry
+            {submitting ? 'Starting…' : 'Retry generation'}
           </button>
         )}
       </div>

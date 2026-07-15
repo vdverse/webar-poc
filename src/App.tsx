@@ -77,7 +77,7 @@ export default function App() {
                     <NotAvailableYetPage
                       title="Generation Jobs"
                       batch="Batch 3"
-                      description="Open a photo project and use Generate, or go to Projects → Generate on a saved single-image / multi-view project."
+                      description="Open a photo project’s Generate page after saving photos, or continue from Projects → a single-image / multi-view project."
                     />
                   }
                 />
