@@ -73,7 +73,7 @@ describe('evaluateGenerateGate', () => {
     ).toBe('images-incomplete');
   });
 
-  it('blocks active jobs and unconfigured provider', () => {
+  it('blocks active jobs, unconfigured provider, and exhausted credits', () => {
     expect(
       evaluateGenerateGate({
         sourceMethod: 'single_image',
@@ -95,6 +95,18 @@ describe('evaluateGenerateGate', () => {
         providerConfigured: false,
       }).reason,
     ).toBe('provider-unavailable');
+
+    expect(
+      evaluateGenerateGate({
+        sourceMethod: 'single_image',
+        wizardStage: 'saved',
+        imageCount: 1,
+        imagesUploading: false,
+        activeJob: null,
+        providerConfigured: true,
+        remainingCredits: 0,
+      }).reason,
+    ).toBe('no-credits');
   });
 
   it('allows a ready photo project', () => {
@@ -105,9 +117,23 @@ describe('evaluateGenerateGate', () => {
       imagesUploading: false,
       activeJob: null,
       providerConfigured: null,
+      remainingCredits: 2,
     });
     expect(r.canGenerate).toBe(true);
     expect(r.reason).toBe('ok');
+  });
+
+  it('does not block on credits while remainingCredits is unknown', () => {
+    const r = evaluateGenerateGate({
+      sourceMethod: 'single_image',
+      wizardStage: 'saved',
+      imageCount: 1,
+      imagesUploading: false,
+      activeJob: null,
+      providerConfigured: null,
+      remainingCredits: null,
+    });
+    expect(r.canGenerate).toBe(true);
   });
 });
 
@@ -128,6 +154,8 @@ describe('nextActionForError', () => {
   it('maps known codes to next actions', () => {
     expect(nextActionForError('provider-not-configured')).toMatch(/IMAGE_TO_3D/);
     expect(nextActionForError('duplicate-active-job')).toMatch(/cancel/i);
+    expect(nextActionForError('entitlement-exhausted')).toMatch(/credits remaining/i);
+    expect(nextActionForError('entitlement-exhausted')).not.toMatch(/development/i);
   });
 });
 

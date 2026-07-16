@@ -23,6 +23,7 @@ export type GenerationGateReason =
   | 'images-uploading'
   | 'active-job'
   | 'provider-unavailable'
+  | 'no-credits'
   | 'ok';
 
 export interface GenerationGateInput {
@@ -33,6 +34,11 @@ export interface GenerationGateInput {
   activeJob: GenerationJob | null;
   /** False when Edge Function reports provider-not-configured or env gate. */
   providerConfigured: boolean | null;
+  /**
+   * Remaining `profiles.generation_credits`. Null/undefined = unknown
+   * (do not block optimistically until the profile query resolves).
+   */
+  remainingCredits?: number | null;
 }
 
 export function evaluateGenerateGate(input: GenerationGateInput): {
@@ -88,6 +94,13 @@ export function evaluateGenerateGate(input: GenerationGateInput): {
         'Image-to-3D is not configured on the server yet. Direct GLB upload still works.',
     };
   }
+  if (input.remainingCredits != null && input.remainingCredits <= 0) {
+    return {
+      canGenerate: false,
+      reason: 'no-credits',
+      message: 'No generation credits remaining.',
+    };
+  }
   return {
     canGenerate: true,
     reason: 'ok',
@@ -127,7 +140,7 @@ export function nextActionForError(code: string | null | undefined): string {
     case 'duplicate-active-job':
       return 'Open the current job and wait, or cancel it if stuck.';
     case 'entitlement-exhausted':
-      return 'Development generation limit reached. Upload a GLB or wait for credits.';
+      return 'No generation credits remaining. Ask an admin to top up credits, or upload a GLB.';
     case 'provider-rate-limit':
     case 'provider-quota-exceeded':
       return 'Wait and retry later, or upload an existing GLB.';

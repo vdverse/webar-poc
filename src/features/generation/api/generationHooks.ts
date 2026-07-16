@@ -7,10 +7,20 @@ import {
   GenerationServiceError,
   getGenerationStatus,
   getLatestJobForProject,
+  getRemainingGenerationCredits,
 } from './generationService';
 import { isActiveGenerationStatus } from '../types';
 
 const jobKey = (projectId: string) => ['generation-job', projectId] as const;
+const creditsKey = ['generation-credits'] as const;
+
+export function useGenerationCreditsQuery() {
+  return useQuery({
+    queryKey: creditsKey,
+    queryFn: getRemainingGenerationCredits,
+    refetchOnWindowFocus: true,
+  });
+}
 
 export function useLatestGenerationJobQuery(projectId: string | undefined) {
   return useQuery({
@@ -27,6 +37,7 @@ export function useCreateGenerationMutation(projectId: string) {
     mutationFn: () => createGenerationJob(projectId),
     onSuccess: (job) => {
       qc.setQueryData(jobKey(projectId), job);
+      void qc.invalidateQueries({ queryKey: creditsKey });
     },
   });
 }

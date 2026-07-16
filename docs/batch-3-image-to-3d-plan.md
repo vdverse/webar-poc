@@ -68,8 +68,9 @@ Create job → submit → poll (or webhook later) → download GLB → validate 
 
 ## 10–12. Failure, cost, deploy
 
-One active job per project (existing unique index). Dev generation limit
-server-side. Deploy secrets via `supabase secrets set`. Frontend on
+One active job per project (existing unique index). Generation credits
+(`profiles.generation_credits`) enforced server-side. Deploy secrets via
+`supabase secrets set`. Frontend on
 https://webar-poc-one.vercel.app.
 
 ## 13–14. Testing / limitations

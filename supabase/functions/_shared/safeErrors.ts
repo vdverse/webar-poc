@@ -14,7 +14,7 @@ const SAFE: Record<string, string> = {
   'invalid-images': 'Source images are missing or invalid for this project.',
   'missing-images': 'Upload the required photos before generating.',
   'duplicate-active-job': 'A generation job is already running for this project.',
-  'entitlement-exhausted': 'You have used the development generation limit.',
+  'entitlement-exhausted': 'No generation credits remaining.',
   'unauthorized': 'Sign in again to continue.',
   'forbidden': 'You do not own this project.',
   'bad-source-method': 'Generation only works for single-image or multi-view projects.',

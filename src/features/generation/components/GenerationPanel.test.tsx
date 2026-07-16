@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mutateCreate = vi.fn();
+let creditsRemaining: number | null = 3;
 
 vi.mock('../../models/modelHooks', () => ({
   useLatestModelQuery: () => ({ data: null }),
@@ -11,6 +12,7 @@ vi.mock('../../models/modelHooks', () => ({
 
 vi.mock('../api/generationHooks', () => ({
   useLatestGenerationJobQuery: () => ({ data: null }),
+  useGenerationCreditsQuery: () => ({ data: creditsRemaining }),
   useCreateGenerationMutation: () => ({
     mutate: mutateCreate,
     isPending: false,
@@ -29,6 +31,7 @@ import { GenerationPanel } from './GenerationPanel';
 afterEach(() => {
   cleanup();
   mutateCreate.mockReset();
+  creditsRemaining = 3;
 });
 
 function renderPanel(imageCount = 1) {
@@ -61,5 +64,14 @@ describe('GenerationPanel', () => {
     renderPanel(0);
     const btn = screen.getByRole('button', { name: /Generate 3D model/i }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
+  });
+
+  it('disables Generate with a clear credits reason when remaining credits are 0', () => {
+    creditsRemaining = 0;
+    renderPanel(1);
+    const btn = screen.getByRole('button', { name: /Generate 3D model/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toMatch(/No generation credits remaining/i);
+    expect(screen.queryByText(/development generation limit/i)).toBeNull();
   });
 });

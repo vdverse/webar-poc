@@ -106,3 +106,21 @@ export async function getLatestJobForProject(projectId: string): Promise<Generat
   }
   return (data as GenerationJob | null) ?? null;
 }
+
+/** Remaining generation credits for the signed-in user (`profiles.generation_credits`). */
+export async function getRemainingGenerationCredits(): Promise<number> {
+  const client = requireClient();
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) {
+    throw new ProjectServiceError('not-authenticated', 'You are signed out. Sign in again.');
+  }
+  const { data, error } = await client
+    .from('profiles')
+    .select('generation_credits')
+    .eq('id', userData.user.id)
+    .maybeSingle();
+  if (error) {
+    throw new ProjectServiceError('request-failed', 'Could not load generation credits.');
+  }
+  return typeof data?.generation_credits === 'number' ? data.generation_credits : 0;
+}

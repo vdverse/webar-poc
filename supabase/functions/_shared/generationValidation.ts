@@ -5,7 +5,6 @@ export const MULTI_VIEW_MIN = 2;
 export const MULTI_VIEW_MAX = 12;
 /** Meshy multi-image-to-3d official limit (docs.meshy.ai). */
 export const MESHY_MULTI_MAX_IMAGES = 4;
-export const DEV_GENERATION_LIMIT = 10;
 export const SIGNED_URL_TTL_SECONDS = 15 * 60;
 export const MAX_RESULT_BYTES = 25 * 1024 * 1024;
 

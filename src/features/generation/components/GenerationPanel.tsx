@@ -5,6 +5,7 @@ import { evaluateGenerateGate } from '../generationGates';
 import {
   useCancelGenerationMutation,
   useCreateGenerationMutation,
+  useGenerationCreditsQuery,
   useGenerationStatusPolling,
   useLatestGenerationJobQuery,
 } from '../api/generationHooks';
@@ -29,6 +30,7 @@ export function GenerationPanel({
 }) {
   const jobQuery = useLatestGenerationJobQuery(projectId);
   const modelQuery = useLatestModelQuery(projectId);
+  const creditsQuery = useGenerationCreditsQuery();
   const create = useCreateGenerationMutation(projectId);
   const cancel = useCancelGenerationMutation(projectId);
 
@@ -50,6 +52,7 @@ export function GenerationPanel({
     imagesUploading: false,
     activeJob: job ?? null,
     providerConfigured,
+    remainingCredits: creditsQuery.data ?? null,
   });
 
   const submitting = create.isPending;
@@ -58,6 +61,12 @@ export function GenerationPanel({
   return (
     <div className="generation-panel" aria-label="Image to 3D generation">
       <GenerationChecklist multiView={sourceMethod === 'multi_view'} />
+
+      {creditsQuery.data != null && (
+        <p className="dash-page-sub" aria-live="polite">
+          Generation credits remaining: {creditsQuery.data}
+        </p>
+      )}
 
       {job && <GenerationProgress job={job} />}
 
@@ -105,7 +114,12 @@ export function GenerationPanel({
           <button
             type="button"
             className="dash-button"
-            disabled={submitting}
+            disabled={submitting || (creditsQuery.data != null && creditsQuery.data <= 0)}
+            title={
+              creditsQuery.data != null && creditsQuery.data <= 0
+                ? 'No generation credits remaining.'
+                : undefined
+            }
             onClick={() => create.mutate()}
           >
             {submitting ? 'Starting…' : 'Retry generation'}
